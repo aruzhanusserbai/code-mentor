@@ -1,0 +1,27 @@
+# Ground-truth labels for seeded bugs.
+# Used by the eval to check whether the agent found the cause and location.
+# Paths are relative to template/.
+#
+# Ticket bugs live in the template itself (no patch needed);
+# the other seeded bugs will be patches applied to the reference solution.
+
+bugs:
+  - id: ticket-1
+    ticket: 1
+    patch: null   # present in the template as shipped
+    category: validation
+    symptom: "POST /orders with empty or missing items returns 500 instead of 400"
+    file: src/main/java/com/shopflow/orders/order/OrderService.java
+    line: 40
+    related_locations:
+      - file: src/main/java/com/shopflow/orders/order/dto/CreateOrderRequest.java
+        line: 10
+    cause: >
+      CreateOrderRequest.items has no @NotEmpty constraint, so an empty or null
+      list passes validation. OrderService.create takes the order currency from
+      request.getItems().get(0), which throws IndexOutOfBoundsException for []
+      and NullPointerException for null; the global handler maps it to 500.
+    expected_fix: >
+      Add @NotEmpty to CreateOrderRequest.items. The existing
+      MethodArgumentNotValidException handler then returns 400 in the
+      standard error format.
