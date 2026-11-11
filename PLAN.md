@@ -1,6 +1,6 @@
 # PLAN — CodeMentor: AI-Reviewed Project-Based Backend Training
 
-Author: Aruzhan Usserbai (individual project, approved by the instructor)
+Author: Aruzhan Usserbai
 Written: 11 Nov 2026, before any code.
 
 ## 1. Problem and user

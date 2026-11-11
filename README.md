@@ -58,3 +58,11 @@ Copy `.env.example` to `.env` and fill in the values. `.env` is git-ignored.
 | `OPENROUTER_API_KEY` | agent |
 | `CODEMENTOR_MODEL` | agent (model id on OpenRouter) |
 | `CODEMENTOR_BASE_URL` | ticket tests |
+
+## TODO
+
+- [ ] Add the Maven Wrapper (`mvnw`) to `template/` (needs network; blocked on 11 Nov).
+- [ ] Verify the full Docker path: `docker compose up --build` in `template/` and the
+      ticket 0–1 tests against it, including Flyway migrations. On 11 Nov only an offline
+      run was possible (local Maven cache, schema applied with `psql`). If the local network
+      is still too slow, verify in GitHub Actions on 13–14 Nov.
