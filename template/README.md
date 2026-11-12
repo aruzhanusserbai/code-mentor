@@ -44,3 +44,18 @@ The API is described in [CONTRACT.md](CONTRACT.md).
    name), and the mentor bot comments with hints. A PR from a branch that does
    not follow the naming rule is not checked: the check fails with a message
    asking you to rename the branch.
+
+## Set up the mentor (once, after creating your repository)
+
+The automated checks call an AI mentor through OpenRouter. In your repository
+on GitHub open **Settings → Secrets and variables → Actions** and add:
+
+| Name | Where | Value |
+|------|-------|-------|
+| `OPENROUTER_API_KEY` | **Secrets** tab | your OpenRouter API key |
+| `CODEMENTOR_MODEL` | **Variables** tab | the model id, for example the one given by your course |
+
+The model must be a *variable*, not a secret: the check reads it from
+variables. If it is missing, the tests still run and you get a plain test
+result comment instead of a hint; the check annotations then say
+"missing environment variables: CODEMENTOR_MODEL".

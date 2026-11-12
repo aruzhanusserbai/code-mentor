@@ -280,3 +280,24 @@ again.
 
 **Alternatives.** Leave the prompt as is and rely on post-processing: code can
 only remove code blocks, it cannot judge how direct a hint is.
+
+## D16 — Mistake: first CI agent run failed because of a setting (13 Nov 2026)
+
+**What happened.** The first CI run of the agent (run 43219713901, PR #4 in
+the test student repository) exited with code 2: `CODEMENTOR_MODEL` was stored
+under **Secrets** instead of **Variables**, so `vars.CODEMENTOR_MODEL` was
+empty. The workflow fell back to the plain `mode=check` comment, as designed
+in D14.
+
+**How it was found.** The public API showed only "Process completed with exit
+code 2"; the reason was in the job log, which needs authentication. I found it
+by checking the repository settings.
+
+**What changed.** Agent errors are now also printed as GitHub `::error`
+annotations with the name of the missing variable (never its value), commit
+`be79b20`; that would have shown the cause right away. The template README
+now has a setup step: `OPENROUTER_API_KEY` → Secrets, `CODEMENTOR_MODEL` →
+Variables.
+
+**Lesson.** A failure that only the CI log explains is slow to debug; make the
+reason visible where it is read first (annotations, PR comment).
