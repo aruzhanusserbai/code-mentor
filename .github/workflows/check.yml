@@ -111,7 +111,8 @@ jobs:
           fi
 
       - name: Collect service logs
-        if: always()
+        # Only if we tried to start the service (not when the branch name was rejected).
+        if: always() && (steps.service.outcome == 'success' || steps.service.outcome == 'failure')
         working-directory: student
         run: docker compose logs --no-color > ../service.log 2>&1 || true
 
