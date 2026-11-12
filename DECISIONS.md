@@ -222,3 +222,61 @@ Commit `21196c1`; verified by a new run on `fix-stuff`.
 `always()` must check that everything it depends on (checkout, a started
 service) really happened. Claude wrote the original condition; the planned
 negative scenario caught it.
+
+## D13 — Product model: ERNIE 5.5 Flash Preview via OpenRouter (13 Nov 2026)
+
+**What.** The agent uses ERNIE 5.5 Flash Preview (free tier on OpenRouter) for
+development and the first end-to-end runs. The model id is not in the code: it
+comes from `CODEMENTOR_MODEL` (local `.env`, and a repository variable in the
+test student repository).
+
+**Why.** The provider does not train on requests, and student code is sent to
+the model. A one-request smoke test (one fake `read_file` tool) returned
+`finish_reason: tool_calls` with valid JSON arguments, so tool calling works
+through OpenRouter. The free tier allows about 50 requests per day, so real
+runs are kept to a minimum; unit tests use a fake LLM.
+
+**Alternatives.** Inkling 2 Small: a possible second model for the eval, but it
+trains on requests and requires a user ID, so it is not used for student code
+by default. A paid model (Claude Haiku/Sonnet) stays the plan for the final
+eval and demo (PLAN.md, section 5).
+
+## D14 — The agent writes the comment; the workflow posts it (13 Nov 2026)
+
+**What.** PLAN.md lists `post_comment` as an agent tool. In v0 it is not a
+tool: the agent returns its final answer, code wraps it into `comment.md`
+(hidden marker, header, footer) and a workflow step posts it with
+`gh pr comment`.
+
+**Why.** Exactly one comment per run is guaranteed by code, not by the model
+(it cannot post twice or forget to post). The hidden marker
+`<!-- codementor:ticket=N;mode=debugging;level=L -->` is written by code, so
+the model cannot fake a level. The agent process gets no GitHub token, so it
+is read-only on the student repository by construction. If the agent fails,
+the workflow posts the old `mode=check` comment, so the student always gets a
+result.
+
+**Alternatives.** A `post_comment` tool calling the GitHub API: closer to the
+original plan, but the model controls when and how often it posts and needs a
+token with write access.
+
+## D15 — Level 1 hint was too direct: stricter prompt rule (13 Nov 2026)
+
+**What.** The first real local run (ticket 1, untouched template) found the
+right cause and gave no code, file or line number, but the level 1 hint
+practically named the `items` field and the missing check. The debugging
+prompt now also says: at level 1 do not name the class, field or method that
+is wrong and do not state the cause directly; describe what you observe
+(status code, exception type, where in the flow it happens).
+
+**Why.** Level 1 must be a nudge (PLAN.md, section 2). If the first hint
+already names the cause, levels 2 and 3 have nothing left to add and the
+student does not practise debugging.
+
+**Limits of this decision.** It is based on a single run, so it is a guess,
+not a measurement. The balance "not too direct / not useless" will be checked
+in the eval (rubric, no-spoiler rate). Until then the prompt is not changed
+again.
+
+**Alternatives.** Leave the prompt as is and rely on post-processing: code can
+only remove code blocks, it cannot judge how direct a hint is.

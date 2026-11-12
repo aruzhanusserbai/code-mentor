@@ -1,7 +1,8 @@
 # Reusable workflow called from student repositories (see
 # template/.github/workflows/codementor.yml). It starts the student's service,
 # runs the protected tests of the ticket taken from the branch name and posts
-# the result as a PR comment. The mentor agent will replace the comment step.
+# the result as a PR comment. If the tests failed, the mentor agent (debugging
+# mode) writes the comment instead; if the agent fails, the plain result is posted.
 
 name: CodeMentor check
 
@@ -116,6 +117,25 @@ jobs:
         working-directory: student
         run: docker compose logs --no-color > ../service.log 2>&1 || true
 
+      # The agent only reads: it gets no GitHub token and writes comment.md,
+      # which the next step posts (DECISIONS.md, D14).
+      - name: Run the mentor agent (debugging mode)
+        id: agent
+        if: steps.result.outputs.value == 'failed'
+        continue-on-error: true
+        working-directory: codementor
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          CODEMENTOR_MODEL: ${{ vars.CODEMENTOR_MODEL }}
+          CODEMENTOR_BASE_URL: http://localhost:8080
+          TICKET: ${{ steps.ticket.outputs.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          pip install -r agent/requirements.txt
+          python -m agent.main --ticket "$TICKET" --repo ../student \
+            --test-output ../test-output.txt --log ../service.log \
+            --out ../comment.md --trace ../agent-trace.json --run-url "$RUN_URL"
+
       - name: Upload test output and logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,20 +144,26 @@ jobs:
           path: |
             test-output.txt
             service.log
+            agent-trace.json
           if-no-files-found: ignore
 
-      # Placeholder until the mentor agent is connected: one new comment per run.
-      # The hidden marker uses mode=check, so the agent will not count these
-      # comments when it picks the next hint level (it counts mode=debugging).
+      # One new comment per run. The agent comment has mode=debugging; the plain
+      # result comment (tests passed, build failed, or the agent failed) has
+      # mode=check, so it never counts as a hint level.
       - name: Comment on the pull request
         if: steps.result.outputs.value != ''
         env:
+          AGENT_OUTCOME: ${{ steps.agent.outcome }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           TICKET: ${{ steps.ticket.outputs.number }}
           RESULT: ${{ steps.result.outputs.value }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          if [ "$AGENT_OUTCOME" = "success" ] && [ -s comment.md ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+            exit 0
+          fi
           case "$RESULT" in
             passed) headline="All ticket ${TICKET} tests passed." ;;
             failed) headline="Some ticket ${TICKET} tests failed." ;;

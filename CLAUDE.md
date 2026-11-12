@@ -71,7 +71,11 @@ you. I must be able to explain every line, so keep code simple and readable.
   review the list, run it without `--dry-run`, I push the template repo myself.
 - Pipeline check: PRs in `aruzhanusserbai/codementor-student-test` (see README, "Related
   repositories"). Read runs and comments through the public GitHub API; `gh` is not installed.
-- Agent tests: `pytest agent/tests -v`
+- Agent deps: `.venv/Scripts/python -m pip install -r agent/requirements.txt`
+- Agent tests (fake LLM, no network): `pytest agent/tests -v`
+- Agent, one real run (uses ~3–11 model requests; free tier ≈ 50/day, save them):
+  `python -m agent.main --ticket 1 --repo template --test-output <file> --log <service.log> --out comment.md`
+  (reads `.env`; needs the service running for `run_test`)
 - Eval: `python eval/run_eval.py --model <model>`
 
 ## Style
