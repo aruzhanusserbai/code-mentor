@@ -301,3 +301,67 @@ Variables.
 
 **Lesson.** A failure that only the CI log explains is slow to debug; make the
 reason visible where it is read first (annotations, PR comment).
+
+## D17 — The workflow picks the hint level; only bot markers count (12 Nov 2026)
+
+**What.** Before the agent runs, a workflow step (which has `GH_TOKEN`) reads
+the PR comments, counts earlier `mode=debugging` markers for the same ticket
+and passes `--level N` to the agent (N = count + 1, at most 3). Only comments
+written by `github-actions[bot]` are counted.
+
+**Why.** The agent stays without a GitHub token (D14). A student can write any
+text in a PR comment, including `<!-- codementor:ticket=1;mode=debugging;level=2 -->`;
+if every comment counted, the student could jump straight to level 3. Comments
+by the bot are the only ones the student cannot write.
+
+**Alternatives.** The agent reads comments itself through the GitHub API: it
+would need a token, and for private student repositories that token must be
+able to read the repository.
+
+**Known limitation.** The level grows with the number of earlier hints for the
+ticket, even if the student broke something else and the new failure is a
+different problem: they may get a level 3 hint for a problem they see for the
+first time. Possible improvement later: reset the level when the set of failed
+tests changes (store it in the marker).
+
+## D18 — The diagnosis is never published in CI, only in the local eval (12 Nov 2026)
+
+**What.** The agent answers with `{diagnosis, hint_1, hint_2, hint_3}`. In CI
+only the hint of the selected level leaves the agent process, inside
+`comment.md`. The diagnosis and the other hints are not written to the
+artifact, not printed to stdout/stderr and not used in annotations. The CI
+trace keeps only tool names and arguments, the number of model requests, the
+level and the check results (regenerated, fallback). The full answer is saved
+only when the agent runs locally for the eval.
+
+**Why.** Workflow artifacts and logs of a repository can be read by anyone who
+can read the repository, including the student, and logs of a public
+repository by anyone. The diagnosis and hint 3 are close to the answer, so
+publishing them would make the hint levels pointless.
+
+**Alternatives.** Keep the full answer in the artifact for debugging: easier
+to inspect real runs, but it leaks the answer. Encrypting the artifact: more
+moving parts and a key to manage, not worth it for the MVP.
+
+## D19 — Identifier check catches only code-like tokens (12 Nov 2026)
+
+**What.** Code checks that `hint_1` contains no identifiers from the diagnosis.
+Identifiers are only code-like tokens: text in backticks, CamelCase
+(`CreateOrderRequest`), calls (`get(int)`), names ending in `Exception`, and
+annotations (`@NotEmpty`). The match is case-insensitive on word boundaries.
+If the check or the length limit (at most 3 sentences) fails, `hint_1` is
+regenerated once (one request, no tools); if it still fails, a general
+fallback hint is posted.
+
+**Why.** Plain English words that are also field names (`items`, `total`)
+cannot be told apart from normal text. Banning them would send almost every
+ticket 1 hint to the fallback. The real example (eval/examples,
+real-run-01) would be caught anyway: it names `IndexOutOfBoundsException` and
+`get(int)`.
+
+**Limits.** A hint can still give the answer away in plain words ("check that
+the list is present and non-empty"). The eval (rubric, manual review) measures
+that; code only blocks the obvious leaks.
+
+**Alternatives.** Ask the model to list forbidden identifiers itself: it
+decides what it may say, which is the thing we want to check.
