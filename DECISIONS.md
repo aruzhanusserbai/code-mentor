@@ -161,3 +161,21 @@ extra configuration is needed.
 forget or edit later, and labels need extra permissions. (b) Detect the ticket
 from changed files: unreliable, a fix can touch any file. (c) Run all tests
 and report per ticket: noisy and slower.
+
+## D10 — Placeholder PR comment: one per run, marker `mode=check` (12 Nov 2026)
+
+**What.** Until the agent is connected, the workflow posts a new PR comment on
+every run with the test result and a hidden marker
+`<!-- codementor:ticket=N;mode=check;result=passed|failed|build_failed -->`.
+
+**Why.** A new comment per push keeps a visible history of attempts, which is
+the same model the agent will use (PLAN.md: each failed attempt gets a more
+specific hint). The agent will pick the next hint level by counting earlier
+comments with `mode=debugging`; the placeholder uses `mode=check` and has no
+`level`, so it can never shift the hint level.
+
+**Alternatives.** Edit one comment in place: less noise, but loses the history
+the hint levels depend on.
+
+**Note for answer mode (17–23 Nov).** Reply only to comments by the PR author;
+ignore comments by bots (including our own) and by anyone else.

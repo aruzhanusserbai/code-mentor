@@ -66,6 +66,7 @@ you. I must be able to explain every line, so keep code simple and readable.
 - Ticket tests: `pytest tests/tickets/ticket_1 -v` (needs the service running on localhost:8080,
   or set `CODEMENTOR_BASE_URL`). On the untouched template, ticket tests are expected to fail.
 - Check reference patches: `git apply --check --directory=template eval/reference/ticket-0.patch`
+- Publish template (never pushes): `python scripts/publish_template.py --target <clone of template repo> [--dry-run]`
 - Agent tests: `pytest agent/tests -v`
 - Eval: `python eval/run_eval.py --model <model>`
 

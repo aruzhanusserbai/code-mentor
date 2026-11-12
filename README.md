@@ -49,6 +49,26 @@ student's job is to make them pass. Health checks pass.
 Tests read the service address from `CODEMENTOR_BASE_URL`
 (default `http://localhost:8080`).
 
+## How a student PR is checked
+
+The student repository contains a short caller workflow
+(`template/.github/workflows/codementor.yml`) that calls the reusable workflow
+[`.github/workflows/check.yml`](.github/workflows/check.yml) from this
+repository. On every push to a PR it:
+
+1. takes the ticket number N from the branch name (see below);
+2. starts the student's service with `docker compose up -d --build`;
+3. runs the protected tests `tests/tickets/ticket_<N>` from this repository;
+4. uploads the test output and service logs as a workflow artifact;
+5. posts a PR comment with the result (placeholder until the mentor agent is
+   connected) and marks the check red if the tests did not pass.
+
+## Publishing the template repository
+
+`scripts/publish_template.py` copies `template/` (as the repository root) and
+`tickets/` into a local clone of the template repository and commits. It never
+pushes. Use `--dry-run` to see the file list first.
+
 ## Branch naming rule
 
 Students work in branches named `ticket-<N>-<description>`
