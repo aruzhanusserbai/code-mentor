@@ -1,0 +1,2350 @@
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  Opus 5.5 · Claude Pro
+ ▝▝   ▝▝   ~\Desktop\code-mentor
+
+  Fable 5.2 is here for your longest and toughest coding tasks, and is included in your plan until November 16. It draws down usage faster than Opus 5.5. Switch with /model.
+
+❯ Привет! Это мой финальный проект по курсу ИИ. Прочитай PLAN.md и CLAUDE.md.   
+                                                                                
+  Сначала задачи на сегодня и завтра (11–12 ноября, см. Timeline):              
+                                                                                
+  Инициализируй git, создай структуру папок из PLAN.md, .gitignore,             
+  .env.example и короткий README.                                               
+  Создай Spring Boot проект в template/: сервис заказов, PostgreSQL, Flyway,    
+  docker-compose, CONTRACT.md. В нём должен быть баг для тикета 1 (пустая       
+  корзина → 500).                                                               
+  Напиши тесты для тикетов 0 и 1 в tests/tickets/.                              
+                                                                                
+  Перед тем как писать код, покажи план шагов и подожди моего OK. Чекпоинт 16   
+  ноября: к нему должна работать цепочка PR → тесты → комментарий агента.       
+
+  Listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+● Привет! Прочитала PLAN.md и CLAUDE.md, посмотрела окружение. Что сейчас есть
+  на машине:
+
+  - Java 21 есть, Docker и Compose есть.
+  - Maven нет. Поэтому сборку делаю через Maven Wrapper (mvnw) и multi-stage
+    Dockerfile: проект собирается внутри Docker, локальный Maven не нужен.
+  - Python 3.12 вызывается через py, а не python. В README напишу оба варианта.
+  - gh CLI нет. Сегодня он не нужен, но к 13–14 ноября (workflow, комментарии в
+    PR) его стоит поставить.
+
+  План на 11–12 ноября
+
+  1. Скелет репозитория
+  - git init, ветка main.
+  - Папки из PLAN.md: template/, tickets/, tests/tickets/, agent/, eval/,
+    .github/workflows/, agent-logs/. В пустые кладу .gitkeep.
+  - .gitignore: .env, target/, __pycache__/, .venv/, .idea/.
+  - .env.example с OPENROUTER_API_KEY= и CODEMENTOR_MODEL=.
+  - Короткий README.md: что за проект, структура, как запустить template и
+    тесты.
+  - Пустая заготовка DECISIONS.md.
+
+  2. template/: сервис заказов
+  - Spring Boot 3, Java 21, Maven Wrapper, JPA, Flyway, PostgreSQL, Actuator.
+  - Слои: controller → service → repository. Сущности Product, Order, OrderItem.
+    DTO запроса и ответа.
+  - Flyway: V1__init.sql создаёт схему, V2__seed_products.sql добавляет 5–6
+    товаров.
+  - Эндпоинты: GET /actuator/health, GET /products, POST /orders, GET 
+    /orders/{id} (если заказа нет, 404), GET /orders.
+  - Глобальный @RestControllerAdvice с единым форматом ошибки {"error": "...", 
+    "status": 400}. Для 404 и неизвестного продукта он уже работает, чтобы
+    проект выглядел живым.
+  - Баг тикета 1: валидации пустой корзины нет. В сервисе, например, берётся
+    items.get(0) или вызывается .reduce(...).get(), и пустой список (или items: 
+    null) падает с 500. Комментариев в коде про баг не будет. Описание пойдёт в
+    eval/bugs/labels.yaml (file, line, cause).
+  - Подсчёт total пишу корректно, но так, чтобы в него было естественно встроить
+    баг тикета 2 позже (17–23 ноября). Сейчас его не добавляю.
+  - Dockerfile (multi-stage) и docker-compose.yml (postgres + app, healthcheck,
+    порт 8080).
+  - CONTRACT.md: порт, эндпоинты, форматы запросов и ответов, коды статусов,
+    формат ошибки.
+
+  3. Тикеты — tickets/ticket-0.md и tickets/ticket-1.md, текст для студента. В
+  тикете 1 описан симптом, причина не раскрывается.
+
+  4. Тесты — tests/tickets/, pytest + requests, только HTTP. Базовый URL берётся
+  из env CODEMENTOR_BASE_URL, по умолчанию http://localhost:8080.
+  - ticket_0: health отвечает UP, GET /products не пустой, корректный заказ
+    создаётся (201) и читается через GET /orders/{id}.
+  - ticket_1: пустой items → 400 и непустое поле error. items отсутствует → 400.
+    Регрессия: валидный заказ по-прежнему возвращает 201.
+  - requirements.txt и общий conftest.py.
+
+  5. Проверка — docker compose up --build, затем запуск тестов. Ожидаю, что
+  ticket_0 проходит, а ticket_1 падает: это и есть баг. Потом локально чиню баг
+  во временной копии, убеждаюсь, что ticket_1 проходит, и откатываю. Так видно,
+  что тест ловит именно этот баг.
+
+  6. Первый коммит, обновление раздела Commands в CLAUDE.md, предложения записей
+  для DECISIONS.md.
+
+  Нужно твоё решение
+
+  1. Что проверяет тикет 0? Мой вариант: тесты проверяют только, что проект
+     поднимается и контракт базово работает, а сам тикет — «запусти проект и
+     открой первый PR». Альтернатива: дать маленькое реальное изменение
+     (например, добавить поле version в ответ или новый товар в seed-миграцию),
+     чтобы PR был не пустым. Первый вариант проще, но PR в тикете 0 тогда по
+     сути пустой.
+  2. Нужен ли 400 при items: null, а не только при []? Я бы проверяла оба
+     случая: так требование честнее, и студенту придётся подумать про Bean
+     Validation (@NotEmpty).
+
+  Чекпоинт 16 ноября держу в голове. Поэтому CONTRACT.md и структуру тестов
+  делаю сразу удобными для запуска в Actions: base URL берётся из env, у compose
+  есть healthcheck.
+
+  Жду OK или правки к плану.
+
+✻ Sautéed for 39s · done среда 19:17
+
+❯ OK, план принят. Решения:                                                     
+                                                                                
+  Тикет 0: не пустой PR. Задание: добавить GET /products/{id} (404, если товара 
+  нет), по образцу уже существующего GET /orders/{id}. Тест для тикета 0:       
+  health + этот эндпоинт. В шаблоне его быть не должно, тест сначала падает.    
+  Да, items: null и пустой список → 400. @RestControllerAdvice в шаблоне уже    
+  должен обрабатывать MethodArgumentNotValidException в нашем формате ошибки,   
+  чтобы исправление тикета 1 было небольшим (добавить валидацию).               
+  У items.get(0) должна быть естественная причина в коде, например валюта или   
+  склад берутся из первого товара.                                              
+  Исправление из шага 5 не откатывай в никуда: сохрани его как patch в eval/    
+  для будущего эталонного решения.                                              
+  Запиши решения по тикету 0 и валидации в DECISIONS.md.                        
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Теперь файлы корня.
+
+● Write(.gitignore)
+  ⎿  Wrote 20 lines to .gitignore
+       1 # Secrets
+       2 .env
+       3 
+       4 # Java / Maven
+       5 target/
+       6 *.class
+       7 
+       8 # Python
+       9 __pycache__/
+      10 *.pyc
+     … +10 lines (ctrl+o to expand)
+
+● Write(.env.example)
+  ⎿  Wrote 6 lines to .env.example
+      1 # Copy to .env and fill in. Never commit .env.
+      2 OPENROUTER_API_KEY=
+      3 CODEMENTOR_MODEL=
+      4 
+      5 # Base URL of the running template service (used by ticket tests)
+      6 CODEMENTOR_BASE_URL=http://localhost:8080
+
+● Теперь Spring-проект.
+
+● Write(template\pom.xml)
+  ⎿  Wrote 64 lines to template\pom.xml
+       1 <?xml version="1.0" encoding="UTF-8"?>
+       2 <project xmlns="http://maven.apache.org/POM/4.0.0"
+       3          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       4          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 h
+         ttps://maven.apache.org/xsd/maven-4.0.0.xsd">
+       5     <modelVersion>4.0.0</modelVersion>
+       6 
+       7     <parent>
+       8         <groupId>org.springframework.boot</groupId>
+       9         <artifactId>spring-boot-starter-parent</artifactId>
+     … +55 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\OrdersApplication.java)
+  ⎿  Wrote 12 lines to
+     template\src\main\java\com\shopflow\orders\OrdersApplication.java
+       1 package com.shopflow.orders;
+       2 
+       3 import org.springframework.boot.SpringApplication;
+       4 import org.springframework.boot.autoconfigure.SpringBootApplicat
+         ion;
+       5 
+       6 @SpringBootApplication
+       7 public class OrdersApplication {
+       8 
+       9     public static void main(String[] args) {
+     … +3 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\product\Product.java)
+  ⎿  Wrote 44 lines to
+     template\src\main\java\com\shopflow\orders\product\Product.java
+       1 package com.shopflow.orders.product;
+       2 
+       3 import jakarta.persistence.Column;
+       4 import jakarta.persistence.Entity;
+       5 import jakarta.persistence.Id;
+       6 import jakarta.persistence.Table;
+       7 
+       8 import java.math.BigDecimal;
+       9 
+      10 @Entity
+     … +34 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\product\ProductRepository.jav
+       a)
+  ⎿  Wrote 6 lines to template\src\main\java\com\shopflow\orders\product\Pr
+     oductRepository.java
+      1 package com.shopflow.orders.product;
+      2 
+      3 import org.springframework.data.jpa.repository.JpaRepository;
+      4 
+      5 public interface ProductRepository extends JpaRepository<Product,
+         Long> {
+      6 }
+
+● Write(template\src\main\java\com\shopflow\orders\product\ProductResponse.java)
+  ⎿  Wrote 10 lines to template\src\main\java\com\shopflow\orders\product\P
+     roductResponse.java
+       1 package com.shopflow.orders.product;
+       2 
+       3 import java.math.BigDecimal;
+       4 
+       5 public record ProductResponse(Long id, String name, BigDecimal p
+         rice, String currency) {
+       6 
+       7     public static ProductResponse from(Product product) {
+       8         return new ProductResponse(product.getId(), product.getN
+         ame(), product.getPrice(), product.getCurrency());
+     … +2 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\product\ProductService.java)
+  ⎿  Wrote 22 lines to
+     template\src\main\java\com\shopflow\orders\product\ProductService.java
+      1 package com.shopflow.orders.product;
+      2 
+      3 import org.springframework.data.domain.Sort;
+      4 import org.springframework.stereotype.Service;
+      5 
+      6 import java.util.List;
+      7 
+      8 @Service
+      9 public class ProductService {
+     … +13 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\product\ProductController.jav
+       a)
+  ⎿  Wrote 23 lines to template\src\main\java\com\shopflow\orders\product\P
+     roductController.java
+       1 package com.shopflow.orders.product;
+       2 
+       3 import org.springframework.web.bind.annotation.GetMapping;
+       4 import org.springframework.web.bind.annotation.RequestMapping;
+       5 import org.springframework.web.bind.annotation.RestController;
+       6 
+       7 import java.util.List;
+       8 
+       9 @RestController
+      10 @RequestMapping("/products")
+     … +13 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\Order.java)
+  ⎿  Wrote 87 lines to
+     template\src\main\java\com\shopflow\orders\order\Order.java
+       1 package com.shopflow.orders.order;
+       2 
+       3 import jakarta.persistence.CascadeType;
+       4 import jakarta.persistence.Column;
+       5 import jakarta.persistence.Entity;
+       6 import jakarta.persistence.GeneratedValue;
+       7 import jakarta.persistence.GenerationType;
+       8 import jakarta.persistence.Id;
+       9 import jakarta.persistence.OneToMany;
+      10 import jakarta.persistence.Table;
+     … +77 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\OrderItem.java)
+  ⎿  Wrote 70 lines to
+     template\src\main\java\com\shopflow\orders\order\OrderItem.java
+       1 package com.shopflow.orders.order;
+       2 
+       3 import com.shopflow.orders.product.Product;
+       4 import jakarta.persistence.Column;
+       5 import jakarta.persistence.Entity;
+       6 import jakarta.persistence.GeneratedValue;
+       7 import jakarta.persistence.GenerationType;
+       8 import jakarta.persistence.Id;
+       9 import jakarta.persistence.JoinColumn;
+      10 import jakarta.persistence.ManyToOne;
+     … +60 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\OrderRepository.java)
+  ⎿  Wrote 6 lines to
+     template\src\main\java\com\shopflow\orders\order\OrderRepository.java
+      1 package com.shopflow.orders.order;
+      2 
+      3 import org.springframework.data.jpa.repository.JpaRepository;
+      4 
+      5 public interface OrderRepository extends JpaRepository<Order, Lon
+        g> {
+      6 }
+
+● Write(template\src\main\java\com\shopflow\orders\order\dto\CreateOrderRequest.
+       java)
+  ⎿  Wrote 19 lines to template\src\main\java\com\shopflow\orders\order\dto
+     \CreateOrderRequest.java
+       1 package com.shopflow.orders.order.dto;
+       2 
+       3 import jakarta.validation.Valid;
+       4 
+       5 import java.util.List;
+       6 
+       7 public class CreateOrderRequest {
+       8 
+       9     @Valid
+      10     private List<OrderItemRequest> items;
+     … +9 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\dto\OrderItemRequest.ja
+       va)
+  ⎿  Wrote 30 lines to template\src\main\java\com\shopflow\orders\order\dto
+     \OrderItemRequest.java
+      1 package com.shopflow.orders.order.dto;
+      2 
+      3 import jakarta.validation.constraints.Min;
+      4 import jakarta.validation.constraints.NotNull;
+      5 
+      6 public class OrderItemRequest {
+      7 
+      8     @NotNull
+      9     private Long productId;
+     … +21 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\dto\OrderResponse.java)
+  ⎿  Wrote 34 lines to template\src\main\java\com\shopflow\orders\order\dto
+     \OrderResponse.java
+       1 package com.shopflow.orders.order.dto;
+       2 
+       3 import com.shopflow.orders.order.Order;
+       4 import com.shopflow.orders.order.OrderItem;
+       5 
+       6 import java.math.BigDecimal;
+       7 import java.time.OffsetDateTime;
+       8 import java.util.List;
+       9 
+      10 public record OrderResponse(
+     … +24 lines (ctrl+o to expand)
+● Write(template\src\main\java\com\shopflow\orders\order\OrderService.java)
+  ⎿  Wrote 79 lines to
+     template\src\main\java\com\shopflow\orders\order\OrderService.java
+       1 package com.shopflow.orders.order;
+       2 
+       3 import com.shopflow.orders.common.InvalidOrderException;
+       4 import com.shopflow.orders.common.OrderNotFoundException;
+       5 import com.shopflow.orders.order.dto.CreateOrderRequest;
+       6 import com.shopflow.orders.order.dto.OrderItemRequest;
+       7 import com.shopflow.orders.order.dto.OrderResponse;
+       8 import com.shopflow.orders.product.Product;
+       9 import com.shopflow.orders.product.ProductRepository;
+      10 import org.slf4j.Logger;
+     … +69 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\order\OrderController.java)
+  ⎿  Wrote 42 lines to
+     template\src\main\java\com\shopflow\orders\order\OrderController.java
+       1 package com.shopflow.orders.order;
+       2 
+       3 import com.shopflow.orders.order.dto.CreateOrderRequest;
+       4 import com.shopflow.orders.order.dto.OrderResponse;
+       5 import jakarta.validation.Valid;
+       6 import org.springframework.http.HttpStatus;
+       7 import org.springframework.web.bind.annotation.GetMapping;
+       8 import org.springframework.web.bind.annotation.PathVariable;
+       9 import org.springframework.web.bind.annotation.PostMapping;
+      10 import org.springframework.web.bind.annotation.RequestBody;
+     … +32 lines (ctrl+o to expand)
+
+● Write(template\src\main\java\com\shopflow\orders\common\OrderNotFoundException
+       .java)
+  ⎿  Wrote 8 lines to template\src\main\java\com\shopflow\orders\common\Ord
+     erNotFoundException.java
+      1 package com.shopflow.orders.common;
+      2 
+      3 public class OrderNotFoundException extends RuntimeException {
+      4 
+      5     public OrderNotFoundException(Long id) {
+      6         super("Order " + id + " not found");
+      7     }
+      8 }
+
+● Write(template\src\main\java\com\shopflow\orders\common\InvalidOrderException.
+       java)
+  ⎿  Wrote 8 lines to template\src\main\java\com\shopflow\orders\common\Inv
+     alidOrderException.java
+      1 package com.shopflow.orders.common;
+      2 
+      3 public class InvalidOrderException extends RuntimeException {
+      4 
+      5     public InvalidOrderException(String message) {
+      6         super(message);
+      7     }
+      8 }
+
+● Write(template\src\main\java\com\shopflow\orders\common\ErrorResponse.java)
+  ⎿  Wrote 4 lines to
+     template\src\main\java\com\shopflow\orders\common\ErrorResponse.java
+      1 package com.shopflow.orders.common;
+      2 
+      3 public record ErrorResponse(int status, String error) {
+      4 }
+
+● Write(template\src\main\java\com\shopflow\orders\common\GlobalExceptionHandler
+       .java)
+  ⎿  Wrote 68 lines to template\src\main\java\com\shopflow\orders\common\Gl
+     obalExceptionHandler.java
+       1 package com.shopflow.orders.common;
+       2 
+       3 import org.slf4j.Logger;
+       4 import org.slf4j.LoggerFactory;
+       5 import org.springframework.http.HttpStatus;
+       6 import org.springframework.http.ResponseEntity;
+       7 import org.springframework.http.converter.HttpMessageNotReadable
+         Exception;
+       8 import org.springframework.validation.FieldError;
+       9 import org.springframework.web.bind.MethodArgumentNotValidExcept
+     … +60 lines (~3 KB) (ctrl+o to expand)
+
+● Ресурсы, миграции и Docker.
+
+● Write(template\src\main\resources\application.yml)
+  ⎿  Wrote 22 lines to template\src\main\resources\application.yml
+       1 server:
+       2   port: 8080
+       3 
+       4 spring:
+       5   application:
+       6     name: orders-service
+       7   datasource:
+       8     url: ${DB_URL:jdbc:postgresql://localhost:5432/orders}
+       9     username: ${DB_USER:orders}
+      10     password: ${DB_PASSWORD:orders}
+     … +12 lines (ctrl+o to expand)
+
+● Write(template\src\main\resources\db\migration\V1__init.sql)
+  ⎿  Wrote 24 lines to
+     template\src\main\resources\db\migration\V1__init.sql
+       1 CREATE TABLE products (
+       2     id       BIGINT PRIMARY KEY,
+       3     name     VARCHAR(255)   NOT NULL,
+       4     price    NUMERIC(12, 2) NOT NULL,
+       5     currency VARCHAR(3)     NOT NULL
+       6 );
+       7 
+       8 CREATE TABLE orders (
+       9     id         BIGSERIAL PRIMARY KEY,
+      10     status     VARCHAR(32)    NOT NULL,
+     … +14 lines (ctrl+o to expand)
+
+● Write(template\src\main\resources\db\migration\V2__seed_products.sql)
+  ⎿  Wrote 7 lines to
+     template\src\main\resources\db\migration\V2__seed_products.sql
+      1 INSERT INTO products (id, name, price, currency) VALUES
+      2     (1, 'Mechanical keyboard', 32000.00, 'KZT'),
+      3     (2, 'Wireless mouse',       8500.00, 'KZT'),
+      4     (3, 'USB-C hub',           12990.00, 'KZT'),
+      5     (4, '27" monitor',        119000.00, 'KZT'),
+      6     (5, 'Laptop stand',        15500.00, 'KZT'),
+      7     (6, 'Online course gift card', 50.00, 'USD');
+
+● Write(template\Dockerfile)
+  ⎿  Wrote 12 lines to template\Dockerfile
+       1 FROM maven:3.9-eclipse-temurin-21 AS build
+       2 WORKDIR /app
+       3 COPY pom.xml .
+       4 RUN mvn -q dependency:go-offline
+       5 COPY src ./src
+       6 RUN mvn -q package -DskipTests
+       7 
+       8 FROM eclipse-temurin:21-jre
+       9 WORKDIR /app
+      10 COPY --from=build /app/target/orders-service-*.jar app.jar
+     … +2 lines (ctrl+o to expand)
+
+● Write(template\docker-compose.yml)
+  ⎿  Wrote 26 lines to template\docker-compose.yml
+       1 services:
+       2   db:
+       3     image: postgres:16
+       4     environment:
+       5       POSTGRES_DB: orders
+       6       POSTGRES_USER: orders
+       7       POSTGRES_PASSWORD: orders
+       8     ports:
+       9       - "5432:5432"
+      10     healthcheck:
+     … +16 lines (ctrl+o to expand)
+
+● Write(template\.gitignore)
+  ⎿  Wrote 5 lines to template\.gitignore
+      1 target/
+      2 .idea/
+      3 *.iml
+      4 .vscode/
+      5 .env
+
+● Запускаю сборку в фоне, пока пишу остальное.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(template\CONTRACT.md)
+  ⎿  Wrote 96 lines to template\CONTRACT.md
+      1 # API contract — orders-service
+      2 
+      3 This is the public contract of the service. Automated checks talk
+         to the
+      4 service **only over HTTP** as described here, so you may restruct
+        ure the code
+      5 however you like as long as the contract holds.
+      6 
+      7 - Base URL: `http://localhost:8080`
+      8 - All request and response bodies are JSON (`Content-Type: applic
+     … +89 lines (~2 KB) (ctrl+o to expand)
+
+● Write(template\README.md)
+  ⎿  Wrote 42 lines to template\README.md
+       1 # ShopFlow orders-service
+       2 
+       3 Orders service for the ShopFlow online shop. Welcome to the team
+         !
+       4 
+       5 ## Run
+       6 
+       7 Requirements: Docker with Docker Compose.
+       8 
+       9 ```bash
+     … +33 lines (ctrl+o to expand)
+
+● Тикеты и тесты.
+
+● Write(tickets\ticket-0.md)
+  ⎿  Wrote 31 lines to tickets\ticket-0.md
+       1 # Ticket 0 — Set up your workplace: product details endpoint
+       2 
+       3 **Type:** task · **Priority:** normal
+       4 
+       5 ## Context
+       6 
+       7 Welcome to the team! This first ticket helps you get the project
+          running and
+       8 go through the full pull request flow once.
+       9 
+     … +22 lines (ctrl+o to expand)
+
+● Write(tickets\ticket-1.md)
+  ⎿  Wrote 36 lines to tickets\ticket-1.md
+       1 # Ticket 1 — Checkout with an empty cart returns 500
+       2 
+       3 **Type:** bug · **Priority:** high · **Reported by:** frontend t
+         eam
+       4 
+       5 ## Description
+       6 
+       7 When a user clicks "Checkout" with an empty cart, the frontend s
+         ends an order
+       8 without items and the service answers with **500 Internal Server
+     … +29 lines (ctrl+o to expand)
+
+● Write(tests\requirements.txt)
+  ⎿  Wrote 2 lines to tests\requirements.txt
+      1 pytest==8.3.5
+      2 requests==2.32.3
+
+● Write(tests\tickets\conftest.py)
+  ⎿  Wrote 46 lines to tests\tickets\conftest.py
+       1 """Shared fixtures for the black-box ticket tests.
+       2 
+       3 The tests talk to the service only over HTTP (see template/CONTR
+         ACT.md).
+       4 Set CODEMENTOR_BASE_URL to point them at another host.
+       5 """
+       6 
+       7 import os
+       8 import time
+       9 
+     … +37 lines (ctrl+o to expand)
+● Write(tests\tickets\ticket_0\test_ticket_0.py)
+  ⎿  Wrote 30 lines to tests\tickets\ticket_0\test_ticket_0.py
+       1 """Ticket 0: the service runs and GET /products/{id} exists."""
+       2 
+       3 import requests
+       4 
+       5 from conftest import assert_error_body
+       6 
+       7 MISSING_PRODUCT_ID = 999999
+       8 
+       9 
+      10 def test_health_is_up(base_url: str) -> None:
+     … +20 lines (ctrl+o to expand)
+
+● Write(tests\tickets\ticket_1\test_ticket_1.py)
+  ⎿  Wrote 32 lines to tests\tickets\ticket_1\test_ticket_1.py
+      1 """Ticket 1: checkout with an empty cart must return 400, not 500
+        ."""
+      2 
+      3 import requests
+      4 
+      5 from conftest import assert_error_body
+      6 
+      7 
+      8 def post_order(base_url: str, body: dict) -> requests.Response:
+      9     return requests.post(f"{base_url}/orders", json=body, timeout
+     … +24 lines (ctrl+o to expand)
+
+● Перенесу хелпер из conftest в отдельный модуль: импортировать из conftest
+  считается антипаттерном.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Ставлю зависимости для тестов в .venv, пока идёт сборка.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сеть тормозит, видимо из-за параллельной сборки Docker. Повторю с увеличенным
+  таймаутом.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Background command "Build and start the template service" completed (exit code
+0)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сборка упала на скачивании образа: оборвалась сеть (short read). Exit code 0
+  был ложным, его замаскировал tail. Повторяю.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Пока идёт сборка, пишу документацию и метки.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Write(eval\bugs\labels.yaml)
+  ⎿  Wrote 27 lines to eval\bugs\labels.yaml
+       1 # Ground-truth labels for seeded bugs.
+       2 # Used by the eval to check whether the agent found the cause an
+         d location.
+       3 # Paths are relative to template/.
+       4 #
+       5 # Ticket bugs live in the template itself (no patch needed);
+       6 # the other seeded bugs will be patches applied to the reference
+          solution.
+       7 
+       8 bugs:
+     … +19 lines (ctrl+o to expand)
+
+● Write(DECISIONS.md)
+  ⎿  Wrote 51 lines to DECISIONS.md
+       1 # Decisions
+       2 
+       3 A log of non-obvious decisions: what, why, alternatives, and whe
+         re the AI
+       4 assistant (Claude Code) or I were wrong.
+       5 
+       6 ## D1 — Ticket 0 is a small feature, not an empty PR (11 Nov 202
+         6)
+       7 
+       8 **What.** Ticket 0 asks the student to add `GET /products/{id}` 
+     … +44 lines (~2 KB) (ctrl+o to expand)
+
+● Write(README.md)
+  ⎿  Wrote 60 lines to README.md
+       1 # CodeMentor
+       2 
+       3 A training platform for junior backend developers. The student j
+         oins an
+       4 existing Java/Spring project, fixes realistic tickets in their o
+         wn GitHub
+       5 repository, and an AI mentor agent reviews every pull request wi
+         th hints,
+       6 never with solution code.
+       7 
+     … +53 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Загрузка с Docker Hub почти остановилась: за 10 минут скачано 1 МБ из 158.
+  Сейчас проверю, какие образы уже есть локально и работает ли сеть вообще. 
+  · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сеть сейчас около 1 КБ/с, поэтому образ maven (158 МБ) не скачать. Проверю,
+  можно ли собрать проект локально, по кэшу ~/.m2 и Maven из IntelliJ. · summary
+
+  Listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Spring Boot 3.5.5 есть в кэше, а Flyway нет, поэтому я проверю компиляцию
+  Java-кода офлайн в копии во временной папке. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Код компилируется. Сейчас прогоню тесты по-настоящему: постгрес уже локально,
+  миграции через psql, приложение соберу офлайн-Maven'ом из временной копии, а
+  зависшую сборку Docker остановлю. · summary
+
+● Stop Task
+  ⎿  cd /c/Users/Acer/Desktop/code-mentor/template && docker compose up
+     --build -d > /c/Users/Acer/AppData/Local/Temp/claude/26fda1e3b24926e1/
+     99a84d1e-3be9-44ba-bca3… · stopped
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● БД поднята, 6 товаров в seed. Запускаю приложение из временной копии (офлайн,
+  без Flyway, схема уже накатана).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Плагина surefire нет в кэше. Обойдусь без упаковки: соберу classpath и запущу
+  java напрямую.
+
+  Listed 1 directory, ran 3 shell commands (ctrl+o to expand)
+
+● Сервис поднялся (Hibernate validate схему принял). Прогоняю тесты на шаблоне
+  как есть.
+
+  Ran 1 shell command (ctrl+o to expand)
+● Результат ожидаемый: тикет 1 падает с настоящей 500, тикет 0 — на GET
+  /products/1 с 404. Теперь проверю, что стектрейс 500 попадает в лог для
+  get_logs. · summary
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Логи выглядят информативно. Далее индексирую шаблон в git, вношу эталонные
+  правки, проверяю их и сохраняю диффы как патчи. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(template\src\main\java\com\shopflow\orders\common\GlobalExceptionHandle
+        r.java)
+  ⎿  Added 5 lines
+      24          return error(HttpStatus.NOT_FOUND, ex.getMessage());
+      25      }
+      26  
+      27 +    @ExceptionHandler(ProductNotFoundException.class)          
+      28 +    public ResponseEntity<ErrorResponse> handleProductNotFound(
+         +ProductNotFoundException ex) {                                 
+      29 +        return error(HttpStatus.NOT_FOUND, ex.getMessage());   
+      30 +    }                                                          
+      31 +                                                               
+      32      @ExceptionHandler(InvalidOrderException.class)
+      33      public ResponseEntity<ErrorResponse> handleInvalidOrder(Inv
+          alidOrderException ex) {
+      34          return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+
+● Update(template\src\main\java\com\shopflow\orders\product\ProductService.java)
+  ⎿  Added 6 lines
+      19                  .map(ProductResponse::from)
+      20                  .toList();
+      21      }
+      22 +                                                               
+      23 +    public ProductResponse getById(Long id) {                  
+      24 +        Product product = productRepository.findById(id)       
+      25 +                .orElseThrow(() -> new ProductNotFoundException
+         +(id));                                                         
+      26 +        return ProductResponse.from(product);                  
+      27 +    }                                                          
+      28  }
+
+● Update(template\src\main\java\com\shopflow\orders\product\ProductService.java)
+  ⎿  Added 1 line
+      1  package com.shopflow.orders.product;
+      2  
+      3 +import com.shopflow.orders.common.ProductNotFoundException;     
+      4  import org.springframework.data.domain.Sort;
+      5  import org.springframework.stereotype.Service;
+      6  
+
+● Update(template\src\main\java\com\shopflow\orders\product\ProductController.ja
+        va)
+  ⎿  Added 5 lines
+      20      public List<ProductResponse> getAll() {
+      21          return productService.getAll();
+      22      }
+      23 +                                                               
+      24 +    @GetMapping("/{id}")                                       
+      25 +    public ProductResponse getById(@PathVariable Long id) {    
+      26 +        return productService.getById(id);                     
+      27 +    }                                                          
+      28  }
+
+● Update(template\src\main\java\com\shopflow\orders\product\ProductController.ja
+        va)
+  ⎿  Added 1 line
+      1  package com.shopflow.orders.product;
+      2  
+      3  import org.springframework.web.bind.annotation.GetMapping;
+      4 +import org.springframework.web.bind.annotation.PathVariable;    
+      5  import org.springframework.web.bind.annotation.RequestMapping;
+      6  import org.springframework.web.bind.annotation.RestController;
+      7  
+
+● Сохраняю патч тикета 0, затем правлю тикет 1 и добавляю .gitattributes с LF,
+  чтобы CRLF на Windows не ломал патчи и mvnw. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Патч тикета 1 готов. А вывод патча тикета 0 оказался пустым, проверяю.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Я нашла, что git add --renormalize template случайно проиндексировал и мои
+  правки тикета 0, поэтому эталон в индексе уже «починен». Сейчас восстановлю
+  шаблон из нетронутой временной копии compile-check/src, сделав патчи во
+  временном git-репозитории. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+  ⎿  PostToolUse:Bash says: Tip: Run /ultrareview before you push to catch bugs 
+     with a cloud-based multi-agent review.
+
+● Патчи проверены: ровно пять файлов. Копирую их в eval/reference/, прогоняю
+  тесты на исправленной версии и перезапускаю приложение. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Stop Task
+  ⎿  S=/c/Users/Acer/AppData/Local/Temp/claude/26fda1e3b24926e1/99a84d1e-3b
+     e9-44ba-bca3-bed52aaf1496/scratchpad/compile-check; cd $S &&
+     MVN=~/.m2/wrapper/dists/apach… · stopped
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Java-процесс от задачи, PID 34008, всё ещё жив; я его останавливаю и запускаю
+  исправленную версию. · summary
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● С эталонными исправлениями все 6 тестов проходят. Сейчас проверю, какое
+  сообщение увидит студент, а затем верну шаблон к версии с багами. · summary
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Background command "Run the fixed app offline" failed with exit code 1
+
+● Рабочее дерево уже в версии с багами, а в индексе остались фиксы тикета 0.
+  Синхронизирую индекс.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Ставлю версию 3.5.5 в pom.xml, потому что именно с ней код собирался и
+  проверялся. Далее обновлю README, раздел Commands в CLAUDE.md и сделаю коммит.
+  · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Write(eval\reference\README.md)
+  ⎿  Wrote 25 lines to eval\reference\README.md
+      1 # Reference solution
+      2 
+      3 The bug-free reference solution = `template/` + the reference pat
+        ches below,
+      4 applied in order. The eval applies seeded-bug patches on top of i
+        t.
+      5 
+      6 | Patch | Ticket | Change |
+      7 |-------|--------|--------|
+      8 | `ticket-0.patch` | 0 | Adds `GET /products/{id}` with `ProductN
+     … +18 lines (ctrl+o to expand)
+
+● Update(CLAUDE.md)
+  ⎿  Added 4 lines, removed 1 line
+      62  (Update this section as the project grows.)
+      63  
+      64  - Run template: `cd template && docker compose up --build`
+      65 -- Ticket tests: `pytest tests/tickets/ticket_1 -v` (needs the s
+         -ervice running on localhost:8080)                              
+      65 +- Test deps (Windows: `py` instead of `python`): `python -m ven
+         +v .venv && .venv/Scripts/python -m pip install -r tests/require
+         +ments.txt`                                                     
+      66 +- Ticket tests: `pytest tests/tickets/ticket_1 -v` (needs the s
+         +ervice running on localhost:8080,                              
+      67 +  or set `CODEMENTOR_BASE_URL`). On the untouched template, tic
+         +ket tests are expected to fail.                                
+      68 +- Check reference patches: `git apply --check --directory=templ
+         +ate eval/reference/ticket-0.patch`                             
+      69  - Agent tests: `pytest agent/tests -v`
+      70  - Eval: `python eval/run_eval.py --model <model>`
+      71  
+
+● Перед коммитом проверяю, что в индекс не попало ничего лишнего: .venv, .env,
+  ключи.
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Сделала всё по плану, коммит 5b15a3d. Не проверена только сборка через docker 
+  compose up --build: сеть до Docker Hub давала около 1 КБ/с, и образ maven (158
+  МБ) так и не скачался.
+
+  Что проверено
+
+  Без Docker-образа приложения я запустила сервис так: postgres:16 из локального
+  кэша, миграции накатила как init-скрипты, приложение запустила
+  офлайн-Maven'ом из кэша ~/.m2. Hibernate (ddl-auto: validate) принял схему.
+
+  ┌───────────────────┬─────────────────────────────┬───────────────────────┐
+  │                   │           Тикет 0           │        Тикет 1        │
+  ├───────────────────┼─────────────────────────────┼───────────────────────┤
+  │ Шаблон как есть   │ GET /products/1 → 404, тест │ [] и {} → 500, тесты  │
+  │                   │  падает                     │ падают                │
+  ├───────────────────┼─────────────────────────────┼───────────────────────┤
+  │ С эталонными      │ все тесты проходят          │ все тесты проходят    │
+  │ патчами           │                             │                       │
+  └───────────────────┴─────────────────────────────┴───────────────────────┘
+
+  Причина 500 видна в логе: IndexOutOfBoundsException для [] и
+  NullPointerException ... OrderService.java:40 для {}. Агент сможет найти это
+  через get_logs.
+
+  Перед чекпоинтом нужно один раз выполнить cd template && docker compose up 
+  --build при нормальной сети. Миграции через Flyway и Dockerfile в этом прогоне
+  не участвовали.
+
+  Что сделано
+
+  - Шаблон. Причина items.get(0) естественная: валюта заказа берётся из первого
+    товара. В seed есть товар в USD и проверка «один заказ — одна валюта», так
+    что эта строка в коде осмысленна. @RestControllerAdvice уже обрабатывает
+    MethodArgumentNotValidException, поэтому исправление тикета 1 — одна
+    аннотация @NotEmpty.
+  - Эталонные исправления лежат в eval/reference/ticket-0.patch и
+    ticket-1.patch. Проверила, что оба патча чисто применяются к шаблону.
+  - Описание бага есть только в eval/bugs/labels.yaml, в коде шаблона подсказок
+    нет.
+  - DECISIONS.md: D1 — тикет 0 как маленькая фича; D2 — дизайн валидации для
+    тикета 1.
+
+  Где я ошиблась
+
+  Когда добавляла .gitattributes, я выполнила git add --renormalize template.
+  Эта команда занесла в индекс и мои временные правки тикета 0, и первый патч
+  получился пустым. Заметила по размеру файла. Патчи пересобрала из копии
+  шаблона в версии с багами, которую сделала до правок, а потом проверила, что в
+  коммите именно эта версия.
+
+  На что обратить внимание
+
+  1. test_get_missing_product_returns_404 проходит уже на шаблоне. Для
+     несуществующего пути Spring и так отдаёт 404 в нашем формате. Тикет 0 в
+     целом всё равно падает, а этот тест ловит другую ошибку: если студент
+     сделает эндпоинт, который на отсутствующий товар отвечает 500. Если нужно,
+     чтобы падал каждый тест тикета, можно проверять текст ошибки, но тогда
+     формат текста придётся зафиксировать в CONTRACT.md.
+  2. Сообщение валидации зависит от локали JVM. У тебя локально приходит "items:
+     не должно быть пустым", в Docker и CI будет по-английски. Тесты проверяют
+     только, что поле error не пустое, поэтому на них это не влияет.
+  3. Maven Wrapper (mvnw) не добавлен, хотя он был в плане: для его генерации
+     нужна сеть. Сборка идёт внутри Docker, так что для студента это не блокер.
+     Добавлю, когда сеть восстановится.
+  4. Spring Boot 3.5.5 вместо 3.5.7. Взяла ту версию, которая была в кэше и с
+     которой код реально собран и проверен.
+
+  Предлагаю в DECISIONS.md
+
+  - D3. Тесты читают адрес сервиса из CODEMENTOR_BASE_URL и до 90 с ждут health.
+    Это заготовка под запуск в Actions.
+  - D4. Пакеты разложены по фичам (product/, order/, common/), а не по слоям.
+    Внутри каждой фичи сохраняется цепочка controller → service → repository.
+
+  Записать их?
+
+✻ Baked for 29m 38s · done среда 19:49
+
+※ recap: Цель на 11–12 ноября — скелет репозитория, шаблон сервиса и тесты для тикетов 0–1. Всё готово и закоммичено, тесты проверены без Docker-образа приложения. Следующий шаг: при нормальной сети запусти `cd template && docker compose up --build` и проверь сборку. (disable recaps in /config)
+
+❯ Хорошая работа. Ответы:                                                       
+  Тест на 404 оставляем как регрессионный, текст ошибки не фиксируем.           
+  Зафиксируй английскую локаль явно (в Dockerfile через JVM-опции и/или в       
+  настройках приложения), чтобы сообщения были одинаковыми локально, в Docker и 
+  в CI.                                                                         
+  mvnw добавишь, когда будет сеть. Запиши это как TODO.                         
+  Spring Boot 3.5.5 ок, запиши в DECISIONS.md.                                  
+  D3 и D4 записывай. Добавь D5 (локаль) и отдельный пункт про ошибку с git add  
+  --renormalize: что произошло, как заметили, как исправили.                    
+  Проверь, что коммит запушен на GitHub. Ссылка на репозиторий                  
+  https://github.com/aruzhanusserbai/code-mentor.git                            
+  Первым делом, когда сеть позволит: docker compose up --build и полный прогон  
+  тестов тикетов 0 и 1 через Docker, включая Flyway. Если локально сеть так и   
+  не заработает, проверим это прямо в GitHub Actions на 13–14 ноября.           
+  и убери из файлов ([removed at author's request])            
+
+● Начну с правок, потом проверю локаль на живом сервисе, закоммичу и запушу.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● Сеть по-прежнему медленная (~6 КБ/с), но GitHub доступен и репозиторий
+  существует.
+
+● Update(PLAN.md)
+  ⎿  Added 1 line, removed 1 line
+      1  # PLAN — CodeMentor: AI-Reviewed Project-Based Backend Training
+      2  
+      3 -Author: Aruzhan Usserbai ([removed at author's request]
+        -structor)                                                       
+      3 +Author: Aruzhan Usserbai                                        
+      4  Written: 11 Nov 2026, before any code.
+      5  
+      6  ## 1. Problem and user
+
+● Update(template\src\main\resources\application.yml)
+  ⎿  Added 3 lines
+       4  spring:
+       5    application:
+       6      name: orders-service
+       7 +  web:                                                         
+       8 +    locale: en                                                 
+       9 +    locale-resolver: fixed                                     
+      10    datasource:
+      11      url: ${DB_URL:jdbc:postgresql://localhost:5432/orders}
+      12      username: ${DB_USER:orders}
+
+● Write(template\Dockerfile)
+  ⎿  Added 1 line, removed 1 line
+       9  WORKDIR /app
+      10  COPY --from=build /app/target/orders-service-*.jar app.jar
+      11  EXPOSE 8080
+      12 -ENTRYPOINT ["java", "-jar", "app.jar"]                         
+      12 +ENTRYPOINT ["java", "-Duser.language=en", "-Duser.country=US", 
+         +"-jar", "app.jar"]                                             
+
+● Сейчас проверю на живом сервисе, что spring.web.locale даёт английские
+  сообщения на русской JVM, запустив без JVM-флагов, как из IDE. · summary
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● На русской JVM сообщение остаётся английским даже с Accept-Language: ru, а
+  тесты на шаблоне ведут себя как прежде (3 падают, 3 проходят). Сейчас
+  останавливаю сервис. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Background command "Run template app offline" failed with exit code 1
+
+● Задача упала с кодом 1, потому что я сама остановила процесс. Теперь записи в
+  DECISIONS.md и TODO.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Коммичу, затем проверяю, что лежит в удалённом репозитории, и только после
+  этого пушу.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Удалённый репозиторий пустой, конфликтов не будет. Пушу main.
+
+  Pushed to main, ran 1 shell command (ctrl+o to expand)
+
+● Готово, оба коммита на GitHub: main на
+  https://github.com/aruzhanusserbai/code-mentor совпадает с локальным HEAD
+  (ab90067).
+
+  Локаль. Английский язык теперь задан в двух местах:
+  - application.yml: spring.web.locale: en и locale-resolver: fixed. Это
+    покрывает запуск из IDE.
+  - В Dockerfile JVM запускается с -Duser.language=en -Duser.country=US.
+
+  Проверила на живом сервисе: на моей русской JVM и даже с заголовком
+  Accept-Language: ru приходит "items[0].quantity: must be greater than or equal
+  to 1". Тесты на шаблоне ведут себя как раньше: 3 падают (тикеты 0 и 1), 3
+  проходят. Флаги в Dockerfile пока не проверены, потому что образ не собирался.
+
+  DECISIONS.md. Добавила D3–D7:
+  - D3 — адрес сервиса из CODEMENTOR_BASE_URL и ожидание health;
+  - D4 — пакеты по фичам;
+  - D5 — локаль;
+  - D6 — Spring Boot 3.5.5;
+  - D7 — ошибка с git add --renormalize: что произошло, как заметили по пустому
+    патчу, как восстановили и какой вывод.
+
+  TODO. В README появился раздел TODO: добавить mvnw и проверить полный путь
+  через Docker.
+
+  Фраза из PLAN.md. Убрала, больше нигде в файлах её не было. В первом коммите
+  5b15a3d она осталась в истории. Если нужно убрать и оттуда, придётся
+  переписать историю и сделать force push. Пока репозиторий новый, это
+  безопасно, но решать тебе.
+
+  Docker. Ещё не проверен. Сеть до сих пор около 6 КБ/с, а для сборки нужно
+  скачать образы maven (158 МБ) и eclipse-temurin:21-jre. Когда сеть
+  восстановится, первым делом запущу docker compose up --build и прогоню тесты
+  тикетов 0 и 1 через Docker, включая Flyway. Если не выйдет, проверим 13–14
+  ноября в GitHub Actions.
+
+✻ Baked for 3m 17s · done среда 19:59
+
+※ recap: Цель — к 16 ноября собрать цепочку PR → тесты → комментарий агента; каркас, шаблон с багами, тесты тикетов 0–1 и решения D1–D7 уже запушены на GitHub. Следующий шаг: при нормальной сети запустить `docker compose up --build` и прогнать тесты тикетов 0–1 вместе с Flyway. (disable recaps in /config)
+
+❯ /export agent-logs/01-repo-skeleton-and-template.txt                          
+  ⎿  Conversation exported to: C:\Users\Acer\Desktop\code-mentor\agent-logs\01-r
+     epo-skeleton-and-template.txt
+
+❯ Продолжаем по PLAN.md, задачи 13–14 ноября. Сначала мелкие правки: (1) в      
+  tickets/ticket-1.md пример сообщения выдаёт решение (items: must not be empty 
+  — дефолтное сообщение @NotEmpty), замени на нейтральное; (2) правило веток    
+  ticket-<N>-<описание>: workflow запускает только тесты этого тикета, агент    
+  получает номер тикета из имени ветки, запиши в README, тикеты и DECISIONS.md; 
+  (3) порт Postgres в docker-compose 5432:5432 → 5433:5432. Затем покажи план:  
+  reusable workflow, отдельный template-репозиторий со скриптом публикации,     
+  тестовый студенческий репозиторий. Агента пока не пиши. Сначала план, жди     
+  моего OK.                                                                     
+  ⎿  1 skill available
+
+● Сначала проверю состояние репозитория: CreateOrderRequest.java изменился на
+  диске, а в нём баг тикета 1.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● CreateOrderRequest.java matches the commit and the bug is still there; only
+  the file metadata changed. The one untracked file in the repo is your session
+  export. I'm making small edits next. · summary
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(sed -i 's#"5432:5432"#"5433:5432"#' template/docker-compose.yml && sed -i
+      's#localhost:5432/orders#localhost:5433/orders#'
+      template/src/main/resources/applicati…)
+  ⎿   template/README.md                          | 2 +-
+      template/docker-compose.yml                 | 2 +-
+      template/src/main/resources/application.yml | 2 +-
+      3 files changed, 3 insertions(+), 3 deletions(-)
+  ⎿  Updated template\README.md (+1 -1)
+      10  docker compose up --build
+      11  ```
+      12  
+      13 -The service listens on `http://localhost:8080`, PostgreSQL on `
+         -localhost:5432`                                                
+      13 +The service listens on `http://localhost:8080`, PostgreSQL on `
+         +localhost:5433`                                                
+      14  (database / user / password: `orders`).
+      15  
+      16  Check that it works:
+  ⎿  Updated template\docker-compose.yml (+1 -1)
+       6        POSTGRES_USER: orders
+       7        POSTGRES_PASSWORD: orders
+       8      ports:
+       9 -      - "5432:5432"                                            
+       9 +      - "5433:5432"                                            
+      10      healthcheck:
+      11        test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      12        interval: 3s
+  ⎿  Updated template\src\main\resources\application.yml (+1 -1)
+       8      locale: en
+       9      locale-resolver: fixed
+      10    datasource:
+      11 -    url: ${DB_URL:jdbc:postgresql://localhost:5432/orders}     
+      11 +    url: ${DB_URL:jdbc:postgresql://localhost:5433/orders}     
+      12      username: ${DB_USER:orders}
+      13      password: ${DB_PASSWORD:orders}
+      14    jpa:
+
+● Теперь сообщение в тикете 1 и правило веток.
+
+● Update(tickets\ticket-1.md)  ⎿  Added 4 lines, removed 2 lines
+      23  
+      24  The client sent an invalid request, so the service should answe
+          r
+      25  **400 Bad Request** in our standard error format with a message
+           that explains
+      26 -what is wrong, for example:                                    
+      26 +what is wrong:                                                 
+      27  
+      28  ```json
+      29 -{ "status": 400, "error": "items: must not be empty" }         
+      29 +{ "status": 400, "error": "<what is wrong with the request>" } 
+      30  ```
+      31  
+      32 +The exact wording of the message is up to you.                 
+      33 +                                                               
+      34  ## Acceptance criteria
+      35  
+      36  - `POST /orders` with `"items": []` → `400` with a non-empty `e
+          rror` message.
+
+● Update(tickets\ticket-1.md)
+  ⎿  Added 6 lines
+      36  - `POST /orders` with `"items": []` → `400` with a non-empty `e
+          rror` message.
+      37  - `POST /orders` without `items` → `400` with a non-empty `erro
+          r` message.
+      38  - Valid orders are still created with `201`.
+      39 +                                                               
+      40 +## Branch                                                      
+      41 +                                                               
+      42 +Work in a branch named `ticket-1-<short-description>`,         
+      43 +for example `ticket-1-empty-cart`. The automated checks run the
+         + ticket 1 tests                                                
+      44 +only for branches with this prefix.                            
+
+● Update(tickets\ticket-0.md)
+  ⎿  Added 4 lines, removed 1 line
+      17  2. Add the endpoint `GET /products/{id}`:
+      18     - returns the product in the same format as one element of `
+          GET /products`;
+      19     - returns `404` in our standard error format if the product 
+          does not exist.
+      20 -3. Create a branch, commit, push and open a pull request.      
+      20 +3. Create a branch named `ticket-0-<short-description>`, for ex
+         +ample                                                          
+      21 +   `ticket-0-product-by-id`. Commit, push and open a pull reque
+         +st.                                                            
+      22 +   The automated checks find the ticket by the branch name, so 
+         +the                                                            
+      23 +   `ticket-0-` prefix is required.                             
+      24  
+      25  ## Acceptance criteria
+      26  
+
+● Update(template\README.md)
+  ⎿  Added 6 lines, removed 2 lines
+      37  ## Work process
+      38  
+      39  1. Pick a ticket from the `tickets/` folder.
+      40 -2. Create a branch: `git checkout -b ticket-1`.                
+      40 +2. Create a branch named `ticket-<N>-<short-description>`, for 
+         +example                                                        
+      41 +   `git checkout -b ticket-1-empty-cart`. Lowercase letters, di
+         +gits and `-` only.                                             
+      42  3. Fix it, commit, push and open a pull request.
+      42 -4. Automated checks run on the PR, and the mentor bot comments 
+         -with hints.                                                    
+      43 +4. Automated checks run the tests **for ticket N only** (taken 
+         +from the branch                                                
+      44 +   name), and the mentor bot comments with hints. A PR from a b
+         +ranch that does                                                
+      45 +   not follow the naming rule is not checked: the check fails w
+         +ith a message                                                  
+      46 +   asking you to rename the branch.                            
+
+● Update(README.md)
+  ⎿  Added 10 lines
+      49  Tests read the service address from `CODEMENTOR_BASE_URL`
+      50  (default `http://localhost:8080`).
+      51  
+      52 +## Branch naming rule                                          
+      53 +                                                               
+      54 +Students work in branches named `ticket-<N>-<description>`     
+      55 +(regex `^ticket-([0-9]+)-[a-z0-9-]+$`), for example `ticket-1-e
+         +mpty-cart`.                                                    
+      56 +                                                               
+      57 +- The workflow runs only the tests of that ticket: `tests/ticke
+         +ts/ticket_<N>`.                                                
+      58 +- The agent gets the ticket number from the branch name.       
+      59 +- A branch that does not match the rule, or a ticket number wit
+         +hout tests,                                                    
+      60 +  fails the check with a clear message; the tests and the agent
+         + do not run.                                                   
+      61 +                                                               
+      62  ## Configuration
+      63  
+      64  Copy `.env.example` to `.env` and fill in the values. `.env` is
+           git-ignored.
+
+● Bash(cat >> DECISIONS.md <<'EOF'…)
+  ⎿   DECISIONS.md                                | 28 ++++++++++++++++++++
+     ++++++++
+      README.md                                   | 10 ++++++++++
+     … +6 lines (ctrl+o to expand)
+  ⎿  Updated DECISIONS.md (+28 -0)
+      133  temporary changes in the working tree. Better: make the baseli
+           ne commit first
+      134  and produce patches with `git diff` against a commit, or work 
+           in a separate
+      135  copy.
+      136 +                                                              
+      137 +## D8 — Neutral error message in ticket 1 (12 Nov 2026)       
+      138 +                                                              
+      139 +**What.** The example in `tickets/ticket-1.md` is now         
+      140 +`"<what is wrong with the request>"`, and the ticket says the 
+          +wording is up to                                              
+      141 +the student.                                                  
+      142 +                                                              
+      143 +**Why.** The first version showed `"items: must not be empty"`
+          +. That is exactly                                             
+      144 +the default message of `@NotEmpty` formatted by our error hand
+          +ler, so the                                                   
+      145 +ticket gave away the solution. Spotted by me in review, not by
+          + Claude.                                                      
+      146 +                                                              
+      147 +## D9 — Branch naming rule `ticket-<N>-<description>` (12 Nov 
+          +2026)                                                         
+      148 +                                                              
+      149 +**What.** Student branches must match `^ticket-([0-9]+)-[a-z0-
+          +9-]+$`.                                                       
+      150 +The workflow takes N from the branch name and runs only       
+      151 +`tests/tickets/ticket_<N>`. The agent gets the ticket number f
+          +rom the same                                                  
+      152 +place. A branch that does not match, or an N without tests, fa
+          +ils the check                                                 
+      153 +with a message; tests and agent do not run.                   
+      154 +                                                              
+      155 +**Why.** Running all ticket tests on every PR would show failu
+          +res of tickets                                                
+      156 +the student has not started, and the agent would not know whic
+          +h ticket to                                                   
+      157 +help with. The branch name is something the student already se
+          +ts, so no                                                     
+      158 +extra configuration is needed.                                
+      159 +                                                              
+      160 +**Alternatives.** (a) Ticket number in the PR title or a PR la
+          +bel: easy to                                                  
+      161 +forget or edit later, and labels need extra permissions. (b) D
+          +etect the ticket                                              
+      162 +from changed files: unreliable, a fix can touch any file. (c) 
+          +Run all tests                                                 
+      163 +and report per ticket: noisy and slower.                      
+
+● Правки готовы, но не закоммичены. Заодно проверю, не ожила ли сеть для Docker.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сеть снова работает (~860 КБ/с), и я запускаю полную Docker-сборку в фоне, как
+  вы и просили. Пока она идёт, составляю план дальнейших шагов. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Мелкие правки внесены, но ещё не закоммичены:
+
+  1. Тикет 1. Вместо items: must not be empty теперь стоит нейтральный "<what is
+     wrong with the request>", и добавлена фраза, что текст сообщения студент
+     выбирает сам.
+  2. Правило веток. ticket-<N>-<описание>, регулярка
+     ^ticket-([0-9]+)-[a-z0-9-]+$. Описано в README (раздел Branch naming rule),
+     в README шаблона, в обоих тикетах и в DECISIONS.md:
+     - D8 — нейтральное сообщение; там записано, что это заметила ты, а не я;
+     - D9 — правило веток с альтернативами.
+  3. Порт Postgres. В compose теперь 5433:5432. Ещё я сменила значение по
+     умолчанию в application.yml на localhost:5433 и поправила README шаблона.
+     Иначе запуск из IDE против базы из compose стучался бы не в тот порт.
+
+  Docker-сборка с полной проверкой (включая Flyway) идёт в фоне. Результат
+  сообщу отдельно.
+
+  План на 13–14 ноября
+
+  A. Reusable workflow .github/workflows/check.yml (on: workflow_call)
+
+  Вход: platform_ref (по умолчанию main) — из какой версии платформы брать
+  тесты. Один job на ubuntu-latest:
+
+  1. Номер тикета из ветки. Берётся из github.head_ref по регулярке. Если ветка
+     не подходит или нет папки tests/tickets/ticket_<N>, job падает с понятным
+     сообщением в Job Summary. События issue_comment пока пропускаются, они
+     нужны для answer mode (17–23 ноября).
+  2. Checkout двух репозиториев. Репозиторий студента в корень, платформа
+     aruzhanusserbai/code-mentor в codementor/. Тесты берутся оттуда, поэтому
+     студент не может их изменить.
+  3. Сервис. docker compose up -d --build в корне репозитория студента.
+  4. Тесты. pytest codementor/tests/tickets/ticket_<N> с continue-on-error. Итог
+     (passed/failed) уходит в output шага: потом по нему workflow выберет режим
+     агента. Вывод pytest сохраняется в файл.
+  5. Сбор данных. docker compose logs app > app.log, затем вывод тестов и логи
+     загружаются как artifact. Это будущий вход агента для get_logs.
+  6. Заглушка вместо агента. Простой комментарий в PR: «тесты тикета N:
+     passed/failed», через gh pr comment и встроенный GITHUB_TOKEN. Так уже
+     сейчас проверяются права на комментарии, а агент v0 потом заменит только
+     этот шаг. Агента не пишу.
+  7. Итог job. Если тесты упали, job в конце помечается красным, чтобы студент
+     видел статус в PR.
+
+  Ещё: concurrency по номеру PR (новый push отменяет старый прогон),
+  permissions: contents: read, pull-requests: write.
+
+  B. Template-репозиторий и скрипт публикации
+
+  - Caller workflow кладу в template/.github/workflows/codementor.yml. В
+    платформенном репозитории он лежит не в корневой .github, поэтому там не
+    запустится, а в репозиторий шаблона попадёт как есть. Внутри: on: 
+    pull_request, issue_comment, uses: 
+    aruzhanusserbai/code-mentor/.github/workflows/check.yml@main, нужные
+    permissions и secrets: inherit.
+  - Скрипт scripts/publish_template.py (Python, pathlib) с параметром --target 
+    <путь к локальному клону template-репозитория>:
+    - очищает клон, не трогая .git;
+    - копирует template/* и tickets/;
+    - проверяет, что eval/, tests/ и .env не попали;
+    - делает коммит «Publish template from codementor@<sha>».
+  - Push скрипт не делает. Ты делаешь его сама после просмотра git diff, потому
+    что это публикация.
+  - Плюс --dry-run, который только показывает список файлов.
+
+  C. Тестовый студенческий репозиторий (проверка к чекпоинту)
+
+  Сценарии, которые прогоняю:
+
+  ┌─────────────────────────────────────────┬───────────────────────────────┐
+  │               PR из ветки               │           Ожидание            │
+  ├─────────────────────────────────────────┼───────────────────────────────┤
+  │ ticket-1-empty-cart без исправления     │ тесты красные, комментарий    │
+  │                                         │ «failed»                      │
+  ├─────────────────────────────────────────┼───────────────────────────────┤
+  │ та же ветка +                           │ зелёные, комментарий «passed» │
+  │ eval/reference/ticket-1.patch           │                               │
+  ├─────────────────────────────────────────┼───────────────────────────────┤
+  │ ticket-0-product-by-id + патч 0         │ зелёные                       │
+  ├─────────────────────────────────────────┼───────────────────────────────┤
+  │ fix-stuff                               │ понятная ошибка про имя ветки │
+  └─────────────────────────────────────────┴───────────────────────────────┘
+
+  Что нужно от тебя
+
+  1. Создать два репозитория в браузере. gh у меня не установлен, а с GitHub API
+     без него возиться дольше.
+     - Шаблон, предлагаю aruzhanusserbai/shopflow-orders. Нейтральное имя, как у
+       реального проекта. После первой публикации отметить в Settings галочку
+       Template repository.
+     - Тестовый студенческий: «Use this template» → codementor-student-test.
+     - Можно и наоборот: поставить gh (winget install GitHub.cli + gh auth 
+       login), тогда создание сделаю я.
+  2. Коммит и push мелких правок. Сделать сейчас одним коммитом?
+  3. Экспорт сессии agent-logs/01-repo-skeleton-and-template.txt пока не
+     отслеживается git. Прежде чем коммитить, проверю, что в нём нет ключей и
+     личных данных.
+
+  Жду OK или правки к плану.
+
+✻ Churned for 1m 46s · done 14:56
+
+※ recap: Готовим цепочку PR → тесты → комментарий агента к чекпоинту 16 ноября. Мелкие правки внесены, но не закоммичены, а Docker-проверка идёт в фоне. Дальше жду твоё OK на план workflow и создание двух репозиториев на GitHub. (disable recaps in /config)
+
+❯ OK на план A, B, C. Замечания:                                                
+                                                                                
+  В заглушке пусть будет новый комментарий на каждый push, но учти: позже по    
+  истории комментариев агент будет определять уровень подсказки (скрытая метка  
+  в комментарии, см. PLAN.md).                                                  
+  Когда дойдём до answer mode, отвечать только автору PR, комментарии ботов     
+  игнорировать.                                                                 
+  Мелкие правки закоммить и запушь сейчас. Лог 01 проверь на ключи и личные     
+  данные и закоммить тоже.                                                      
+  Репозитории создам сама в браузере. Сначала пустой шаблон, потом ты           
+  запускаешь publish_template.py --dry-run и показываешь список файлов, я       
+  проверяю и пушу. Потом ставлю галочку Template и делаю тестовый репозиторий   
+  через Use this template. Напиши мне точные команды для push, когда дойдём до  
+  этого шага.                                                                   
+  Результат Docker-проверки сообщи, как только будет.                           
+
+● Начну с того, что уже должно быть готово: результат Docker-сборки.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сборка идёт, образ maven скачан на 80%. Пока проверяю лог сессии на ключи и
+  личные данные.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Ключей и email нет. Поищу остальное, что может быть личным: имя пользователя
+  ОС, пути, имя, вуз.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● Ключей, email и телефонов в логе нет; из личного остались только путь с именем
+  учётной записи Windows и имя автора, которое и так публично в PLAN.md. Фразу
+  «[removed at author's request]» я заменю видимой пометкой,
+  так как в логе она встречается дважды, а ты просила её убрать. · summary
+
+● Bash(F=agent-logs/01-repo-skeleton-and-template.txt && sed -i -e
+      's/([removed at author's request])/([removed at
+      author'"'"'s request])/' -e 's/(ind…)
+  ⎿  973:  и убери из файлов ([removed at author's request])
+     986:      3 -Author: Aruzhan Usserbai ([removed at author's request])
+  ⎿  Updated agent-logs\01-repo-skeleton-and-template.txt (+2 -2)
+      970    Первым делом, когда сеть позволит: docker compose up --build
+            и полный прогон  
+      971    тестов тикетов 0 и 1 через Docker, включая Flyway. Если лока
+           льно сеть так и   
+      972    не заработает, проверим это прямо в GitHub Actions на 13–14 
+           ноября.           
+      973 -  и убери из файлов ([removed at author's request]
+          -uctor)                                                        
+      973 +  и убери из файлов ([removed at author's request])           
+          +                                                              
+      974  
+      975  ● Начну с правок, потом проверю локаль на живом сервисе, заком
+           мичу и запушу.
+      976  
+     ...
+      983    ⎿  Added 1 line, removed 1 line
+      984        1  # PLAN — CodeMentor: AI-Reviewed Project-Based Backen
+           d Training
+      985        2  
+      986 -      3 -Author: Aruzhan Usserbai ([removed at author's request]
+          -d by the in                                                   
+      986 +      3 -Author: Aruzhan Usserbai ([removed at author's reques
+          +t])                                                           
+      987          -structor)                                            
+                      
+      988        3 +Author: Aruzhan Usserbai                             
+                      
+      989        4  Written: 11 Nov 2026, before any code.
+
+● Коммичу правки и лог отдельными коммитами и пушу.
+
+  Pushed to main (ctrl+o to expand)
+
+● Запушил правки и лог (e3a57e4); Docker-сборка ещё идёт, и пока пишу workflow и
+  скрипт публикации. Заглушка получит метку mode=check без level, так что на
+  подсказки агента она не повлияет. · summary
+
+● Write(.github\workflows\check.yml)
+  ⎿  Wrote 171 lines to .github\workflows\check.yml
+       1 # Reusable workflow called from student repositories (see
+       2 # template/.github/workflows/codementor.yml). It starts the stud
+         ent's service,
+       3 # runs the protected tests of the ticket taken from the branch n
+         ame and posts
+       4 # the result as a PR comment. The mentor agent will replace the 
+         comment step.
+       5 
+       6 name: CodeMentor check
+       7 
+     … +164 lines (ctrl+o to expand)
+
+● Write(template\.github\workflows\codementor.yml)
+  ⎿  Wrote 15 lines to template\.github\workflows\codementor.yml
+       1 name: CodeMentor
+       2 
+       3 on:
+       4   pull_request:
+       5   issue_comment:
+       6     types: [created]
+       7 
+       8 permissions:
+       9   contents: read
+      10   pull-requests: write
+     … +5 lines (ctrl+o to expand)
+
+● Теперь скрипт публикации.
+
+● Write(scripts\publish_template.py)
+  ⎿  Wrote 122 lines to scripts\publish_template.py
+       1 """Publish the student-facing template into a local clone of the
+          template repository.
+       2 
+       3 Copies template/ (as the repository root) and tickets/ into the 
+         target clone,
+       4 replacing its previous contents (except .git), and commits the r
+         esult.
+       5 It never pushes: review the commit and push it yourself.
+       6 
+       7 Usage:
+     … +115 lines (ctrl+o to expand)
+
+● Проверяю скрипт: сначала dry-run, затем полную публикацию во временный
+  репозиторий и проверку защиты от грязного дерева. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+● Список файлов для шаблона уже правильный: без eval/, tests/ и target/. Не
+  хватает .gitattributes, без которого студенты на Windows получат CRLF и
+  сломают mvnw, поэтому я добавляю его. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Защиты срабатывают. Коммичу локально и проверяю полную публикацию во временный
+  репозиторий.
+
+  Ran 1 shell command (ctrl+o to expand)
+  ⎿  PostToolUse:Bash says: Tip: Run /ultrareview before you push to catch bugs 
+     with a cloud-based multi-agent review — 3 free reviews left.
+
+● Скрипт отработал, старый файл в целевом репозитории удалён, повторный запуск
+  ничего не меняет. Теперь проверяю Docker. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Maven загружает зависимости; пока документация дописывается — команда
+  публикации в CLAUDE.md и README и запись D10. · summary
+
+● Bash(cd /c/Users/Acer/Desktop/code-mentor && py - <<'EOF'
+      from pathlib import Path…)
+  ⎿   CLAUDE.md    |  1 +
+      DECISIONS.md | 18 ++++++++++++++++++
+      README.md    | 20 ++++++++++++++++++++
+      3 files changed, 39 insertions(+)
+  ⎿  Updated CLAUDE.md (+1 -0)
+      66  - Ticket tests: `pytest tests/tickets/ticket_1 -v` (needs the s
+          ervice running on localhost:8080,
+      67    or set `CODEMENTOR_BASE_URL`). On the untouched template, tic
+          ket tests are expected to fail.
+      68  - Check reference patches: `git apply --check --directory=templ
+          ate eval/reference/ticket-0.patch`
+      69 +- Publish template (never pushes): `python scripts/publish_temp
+         +late.py --target <clone of template repo> [--dry-run]`         
+      70  - Agent tests: `pytest agent/tests -v`
+      71  - Eval: `python eval/run_eval.py --model <model>`
+      72  
+  ⎿  Updated DECISIONS.md (+18 -0)
+      161  forget or edit later, and labels need extra permissions. (b) D
+           etect the ticket
+      162  from changed files: unreliable, a fix can touch any file. (c) 
+           Run all tests
+      163  and report per ticket: noisy and slower.
+      164 +                                                              
+      165 +## D10 — Placeholder PR comment: one per run, marker `mode=che
+          +ck` (12 Nov 2026)                                             
+      166 +                                                              
+      167 +**What.** Until the agent is connected, the workflow posts a n
+          +ew PR comment on                                              
+      168 +every run with the test result and a hidden marker            
+      169 +`<!-- codementor:ticket=N;mode=check;result=passed|failed|buil
+          +d_failed -->`.                                                
+      170 +                                                              
+      171 +**Why.** A new comment per push keeps a visible history of att
+          +empts, which is                                               
+      172 +the same model the agent will use (PLAN.md: each failed attemp
+          +t gets a more                                                 
+      173 +specific hint). The agent will pick the next hint level by cou
+          +nting earlier                                                 
+      174 +comments with `mode=debugging`; the placeholder uses `mode=che
+          +ck` and has no                                                
+      175 +`level`, so it can never shift the hint level.                
+      176 +                                                              
+      177 +**Alternatives.** Edit one comment in place: less noise, but l
+          +oses the history                                              
+      178 +the hint levels depend on.                                    
+      179 +                                                              
+      180 +**Note for answer mode (17–23 Nov).** Reply only to comments b
+          +y the PR author;                                              
+      181 +ignore comments by bots (including our own) and by anyone else
+          +.                                                             
+  ⎿  Updated README.md (+20 -0)
+      49  Tests read the service address from `CODEMENTOR_BASE_URL`
+      50  (default `http://localhost:8080`).
+      51  
+      52 +## How a student PR is checked                                 
+      53 +                                                               
+      54 +The student repository contains a short caller workflow        
+      55 +(`template/.github/workflows/codementor.yml`) that calls the re
+         +usable workflow                                                
+      56 +[`.github/workflows/check.yml`](.github/workflows/check.yml) fr
+         +om this                                                        
+      57 +repository. On every push to a PR it:                          
+      58 +                                                               
+      59 +1. takes the ticket number N from the branch name (see below); 
+      60 +2. starts the student's service with `docker compose up -d --bu
+         +ild`;                                                          
+      61 +3. runs the protected tests `tests/tickets/ticket_<N>` from thi
+         +s repository;                                                  
+      62 +4. uploads the test output and service logs as a workflow artif
+         +act;                                                           
+      63 +5. posts a PR comment with the result (placeholder until the me
+         +ntor agent is                                                  
+      64 +   connected) and marks the check red if the tests did not pass
+         +.                                                              
+      65 +                                                               
+      66 +## Publishing the template repository                          
+      67 +                                                               
+      68 +`scripts/publish_template.py` copies `template/` (as the reposi
+         +tory root) and                                                 
+      69 +`tickets/` into a local clone of the template repository and co
+         +mmits. It never                                                
+      70 +pushes. Use `--dry-run` to see the file list first.            
+      71 +                                                               
+      72  ## Branch naming rule
+      73  
+      74  Students work in branches named `ticket-<N>-<description>`
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Жду завершения Docker-сборки.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Background command "Wait for the Docker build to finish" completed (exit code
+0)
+
+● Образ собран, контейнеры созданы. Смотрю, поднялся ли сервис и прошли ли
+  миграции Flyway.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Background command "Build and start template via Docker Compose" completed
+(exit code 0)
+
+● Flyway в Docker применил обе миграции, и сервис стартовал за 6,5 с. Далее
+  прогоню тесты тикетов 0 и 1 на шаблоне в Docker. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Шаблон в Docker работает как ожидалось; сейчас копирую его во временную папку,
+  применяю оба патча, пересобираю на чистой базе и запускаю тесты. · summary
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● С эталонными патчами все 6 тестов в Docker проходят, а Flyway отработал на
+  чистой базе. Останавливаю стенд и закрываю пункт TODO. · summary
+
+● Bash(SP=/c/Users/Acer/AppData/Local/Temp/claude/26fda1e3b24926e1/99a84d1e-3be9
+      -44ba-bca3-bed52aaf1496/scratchpad; cd $SP/reference && docker compose -p
+      cm-reference…)
+  ⎿   Network cm-reference_default Removed
+     e2717b4 Mark the Docker verification TODO as done
+     73792bc Document the PR check flow, template publishing and D10
+     … +2 lines (ctrl+o to expand)
+  ⎿  Updated README.md (+3 -4)
+      92  ## TODO
+      93  
+      94  - [ ] Add the Maven Wrapper (`mvnw`) to `template/` (needs netw
+          ork; blocked on 11 Nov).
+      95 -- [ ] Verify the full Docker path: `docker compose up --build` 
+         -in `template/` and the                                         
+      96 -      ticket 0–1 tests against it, including Flyway migrations.
+         - On 11 Nov only an offline                                     
+      97 -      run was possible (local Maven cache, schema applied with 
+         -`psql`). If the local network                                  
+      98 -      is still too slow, verify in GitHub Actions on 13–14 Nov.
+      95 +- [x] Verify the full Docker path (12 Nov): `docker compose up 
+         +--build` builds the image,                                     
+      96 +      Flyway applies both migrations on a clean database; ticke
+         +t 0–1 tests fail on the                                        
+      97 +      template (3 failed, 3 passed) and all 6 pass with both re
+         +ference patches.                                               
+
+● Docker-проверка пройдена полностью, на версии шаблона с моими сегодняшними
+  правками:
+  - образ собирается;
+  - Flyway на чистой базе применяет обе миграции;
+  - Postgres доступен на порту 5433;
+  - сообщения об ошибках приходят на английском;
+  - на шаблоне как есть 3 теста падают (тикеты 0 и 1), 3 проходят, как и
+    задумано;
+  - с обоими эталонными патчами проходят все 6.
+
+  Пункт TODO про Docker закрыт. Workflow в GitHub Actions пока не запускался:
+  его проверит тестовый репозиторий.
+
+  Что сделано
+
+  - Мелкие правки и лог 01 закоммичены и запушены (e3a57e4). В логе нет ключей,
+    email и телефонов. Фразу, которую ты убрала из PLAN.md, я заменила пометкой
+    [removed at author's request].
+  - .github/workflows/check.yml сделан по плану A.
+    - Итог прогона: passed, failed или build_failed — последний на случай, если
+      сервис не собрался.
+    - Комментарий в PR: новый на каждый push, со скрытой меткой mode=check без
+      level. Счёт уровней подсказки он не сдвинет.
+    - Решение записано в D10. Там же заметка для answer mode: отвечать только
+      автору PR, ботов игнорировать.
+  - template/.github/workflows/codementor.yml — вызывающий workflow для
+    репозиториев студентов.
+  - template/.gitattributes — LF в репозиториях студентов. Этого не было в
+    плане: без него у студентов на Windows будут CRLF, и позже сломается mvnw.
+  - scripts/publish_template.py. Проверила во временном репозитории:
+    - падает, если целевая папка не git-репозиторий;
+    - падает, если в template/ или tickets/ есть незакоммиченные изменения;
+    - удаляет из целевого репозитория старые файлы;
+    - повторный запуск ничего не меняет.
+
+  Три коммита пока только локально (9ff3a3d, 73792bc, e2717b4). check.yml должен
+  оказаться в main до первого PR в тестовом репозитории. Запушить их сейчас?
+
+  Команды на твой шаг
+
+  1. Создай в браузере пустой aruzhanusserbai/shopflow-orders, без README и
+     .gitignore. Потом в PowerShell:
+  cd C:\Users\Acer\Desktop
+  git clone https://github.com/aruzhanusserbai/shopflow-orders.git
+  cd code-mentor
+  py scripts\publish_template.py --target ..\shopflow-orders --dry-run
+  Список файлов я покажу тебе сама. Должен получиться 31 файл: добавился
+  .gitattributes.
+
+  2. После твоей проверки публикация и push:
+  py scripts\publish_template.py --target ..\shopflow-orders
+  git -C ..\shopflow-orders show --stat HEAD
+  git -C ..\shopflow-orders branch -M main
+  git -C ..\shopflow-orders push -u origin main
+  branch -M main нужен на случай, если у тебя git по умолчанию создаёт ветку
+  master.
+
+  3. Дальше Settings → Template repository, потом «Use this template» →
+     codementor-student-test. code-mentor должен оставаться публичным: иначе
+     студенческий репозиторий не сможет вызвать его workflow.
+
+✻ Cooked for 1h 12m 52s · done 16:13
+
+※ recap: Цель — к чекпоинту 16 ноября запустить цепочку PR → тесты → комментарий. Docker-проверка пройдена, workflow и скрипт публикации готовы, три коммита пока только локально. Следующий шаг за тобой: разрешить push и создать пустой репозиторий shopflow-orders. (disable recaps in /config)
+
+❯ Создала пустой публичный репозиторий                                          
+  https://github.com/aruzhanusserbai/shopflow-orders.git. Склонируй его рядом с 
+  проектом (например, в C:\Users\Acer\Desktop\shopflow-orders) и запусти        
+  publish_template.py --dry-run. Покажи список файлов, которые попадут в        
+  шаблон. Ничего не коммить и не пушь, пока я не проверю список.                
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Склонировала репозиторий в C:\Users\Acer\Desktop\shopflow-orders, он пустой,
+  ветка уже main. Сейчас проверю публикуемые файлы на случайные подсказки к
+  багам. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Dry-run показывает 31 файл, который попадёт в шаблон. Я ничего не коммитила и
+  не пушила, shopflow-orders пока пустой.
+
+  В корень репозитория (из template/):
+  .gitattributes
+  .github/workflows/codementor.yml
+  .gitignore
+  CONTRACT.md
+  docker-compose.yml
+  Dockerfile
+  pom.xml
+  README.md
+  src/main/java/com/shopflow/orders/OrdersApplication.java
+  src/main/java/com/shopflow/orders/common/   ErrorResponse, 
+  GlobalExceptionHandler,
+                                              InvalidOrderException, 
+  OrderNotFoundException
+  src/main/java/com/shopflow/orders/order/    Order, OrderController, OrderItem,
+                                              OrderRepository, OrderService
+  src/main/java/com/shopflow/orders/order/dto/ CreateOrderRequest, 
+  OrderItemRequest, OrderResponse
+  src/main/java/com/shopflow/orders/product/  Product, ProductController, 
+  ProductRepository,
+                                              ProductResponse, ProductService
+  src/main/resources/application.yml
+  src/main/resources/db/migration/V1__init.sql
+  src/main/resources/db/migration/V2__seed_products.sql
+
+  В tickets/: ticket-0.md, ticket-1.md.
+
+  Чего в списке нет: eval/, tests/, agent/, agent-logs/, scripts/, .env,
+  target/. Скрипт и не дал бы их опубликовать.
+
+  Публикуемые файлы я проверила на подсказки. Слов вроде bug, TODO, FIXME,
+  NotEmpty в коде нет. Комментариев в Java всего два:
+  - OrderItem.java:34 — // price at the moment of the order, product price may 
+    change later. Безобидный.
+  - OrderService.java:39 — // one order = one currency, we take it from the 
+    first product. Он объясняет, зачем нужен items.get(0), но не говорит, что
+    пустой список там сломается. Обычный комментарий для живого проекта, однако
+    внимание к этой строке он привлекает. Можно оставить, а можно удалить, чтобы
+    студенту пришлось дойти до неё по стектрейсу. Если удалять, то до
+    публикации, и тогда в eval/bugs/labels.yaml номер строки сдвинется с 40
+    на 39.
+
+  Оговорка про содержимое: публикуется закоммиченный шаблон, но три последних
+  коммита платформы (workflow, скрипт, документация) пока не запушены в
+  code-mentor. Скрипт берёт файлы с диска, поэтому список от этого не меняется.
+
+  Когда проверишь список и решишь насчёт комментария, напиши. Я запущу
+  публикацию (коммит в shopflow-orders без push) и покажу git show --stat. Push
+  потом делаешь ты:
+  git -C C:\Users\Acer\Desktop\shopflow-orders push -u origin main
+  Заодно скажи, пушить ли три локальных коммита платформы. check.yml должен
+  оказаться в main до первого PR в тестовом репозитории.
+
+✻ Sautéed for 27s · done 16:18
+
+❯ Список ок. Решения:                                                           
+                                                                                
+  Проверь, что src/main/resources/db/migration/V1__init.sql попадает в          
+  публикацию (в списке видно только V2). Без него Flyway не создаст таблицы.    
+  Комментарий в OrderService.java:39 оставляем: он объясняет намерение, а не    
+  баг. Номер строки в labels.yaml не меняем.                                    
+  Да, сначала запушь три коммита платформы в code-mentor, чтобы check.yml был в 
+  main. Потом делай коммит публикации в shopflow-orders и покажи git show       
+  --stat. Push shopflow-orders сделаю сама.                                     
+  Запиши в DECISIONS.md решение про комментарий на строке 39 (оставили,         
+  почему).                                                                      
+  Что с Docker-проверкой?                                                       
+
+● Сначала проверяю V1__init.sql: он должен быть и в dry-run, и в git.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Файл V1__init.sql есть в публикации (строка 28 в dry-run, перед V2, и
+  отслеживается в git). Теперь добавлю D11 и запушу платформу. · summary
+
+● Bash(cat >> DECISIONS.md <<'EOF'…)
+  ⎿  bb3d527 Record D11: keep the intent comment in OrderService
+     e2717b4 Mark the Docker verification TODO as done
+     73792bc Document the PR check flow, template publishing and D10
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated DECISIONS.md (+20 -0)
+      179  
+      180  **Note for answer mode (17–23 Nov).** Reply only to comments b
+           y the PR author;
+      181  ignore comments by bots (including our own) and by anyone else
+           .
+      182 +                                                              
+      183 +## D11 — Keep the "currency from the first product" comment in
+          + OrderService (12 Nov 2026)                                   
+      184 +                                                              
+      185 +**What.** `OrderService.java` line 39 keeps the comment       
+      186 +`// one order = one currency, we take it from the first produc
+          +t`, directly                                                  
+      187 +above the `items.get(0)` line that causes the ticket 1 bug. Th
+          +e line number in                                              
+      188 +`eval/bugs/labels.yaml` (40) stays the same.                  
+      189 +                                                              
+      190 +**Why.** The comment explains the *intent* of the code (why th
+          +e first item is                                               
+      191 +read), not the bug: it says nothing about empty or missing lis
+          +ts. Real code                                                 
+      192 +has comments like this, and the template should look realistic
+          +. The student                                                 
+      193 +still has to connect the stack trace (`IndexOutOfBoundsExcepti
+          +on` /                                                         
+      194 +`NullPointerException` at line 40) with the missing validation
+          + on the request.                                              
+      195 +                                                              
+      196 +**Alternatives.** Remove the comment so the line draws less at
+          +tention.                                                      
+      197 +Rejected: the code would look less natural, and hiding intent 
+          +is not the skill                                              
+      198 +we train; the skill is reading code and finding where invalid 
+          +input gets in.                                                
+      199 +                                                              
+      200 +**Note.** Claude flagged the comment as a possible hint before
+          + publishing the                                               
+      201 +template; I decided to keep it.                               
+  ⎿  (timeout 3m 20s)
+
+● Платформа запушена, check.yml теперь в main. Делаю коммит публикации в
+  shopflow-orders, без push.
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сверю опубликованное с исходником: баги на месте, строка 40 та же.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● V1__init.sql в публикации есть, Docker-проверка пройдена, а коммит публикации
+  лежит в shopflow-orders и ждёт твоего push.
+
+  V1__init.sql. В dry-run он на строке 28, сразу перед V2. Скорее всего, ты
+  смотрела моё сокращённое перечисление в прошлом сообщении. В коммите
+  публикации файл тоже есть: V1__init.sql | 24 ++++++.
+
+  Docker-проверка прошла ещё в прошлом шаге, я писала об этом в начале прошлого
+  сообщения:
+  - docker compose up --build собирает образ;
+  - Flyway на чистой базе применяет обе миграции, V1 - init и V2 - seed 
+    products, сервис стартует за 6,5 с;
+  - на шаблоне как есть 3 теста падают (тикеты 0 и 1), 3 проходят;
+  - с обоими эталонными патчами в Docker проходят все 6.
+
+  Пункт в TODO отмечен как выполненный.
+
+  Сделано сейчас:
+  1. Добавила в DECISIONS.md запись D11: комментарий на строке 39 оставили,
+     потому что он объясняет намерение, а не баг. Там же отмечено, что я
+     предложила его убрать, а решила ты.
+  2. Запушила в code-mentor четыре коммита: три прежних плюс D11. main на GitHub
+     совпадает с локальным bb3d527, check.yml уже там.
+  3. Сделала коммит публикации в shopflow-orders, без push:
+
+  f34d948 Publish template from codementor@bb3d527
+   31 files changed, 974 insertions(+)
+  Полный --stat выше. Проверила, что опубликованные файлы совпадают с template/
+  и tickets/ побайтно (без учёта CRLF). В CreateOrderRequest нет @NotEmpty, на
+  строке 40 OrderService стоит items.get(0), эндпоинта GET /products/{id} нет.
+
+  Статус [gone] у ветки — это нормально: удалённый репозиторий пока пустой.
+
+  Твой push:
+  git -C C:\Users\Acer\Desktop\shopflow-orders push -u origin main
+  После него: Settings → Template repository, затем «Use this template» →
+  codementor-student-test. Когда создашь тестовый репозиторий, прогоню сценарии
+  из плана C.
+
+✻ Baked for 48s · done 16:21
+
+※ recap: Готовим к чекпоинту цепочку PR → тесты → комментарий; сейчас шаблон shopflow-orders закоммичен локально и ждёт публикации. Дальше ты пушишь shopflow-orders, ставишь галочку Template repository и создаёшь codementor-student-test. (disable recaps in /config)
+
+❯ Запушила shopflow-orders, отметила его как Template, создала                  
+  https://github.com/aruzhanusserbai/codementor-student-test через Use this     
+  template. Прогоняй сценарии из плана C.                                       
+
+● Клонирую тестовый репозиторий и готовлю ветки для четырёх сценариев.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Репозиторий публичный, поэтому я готовлю и пушу три ветки, а сценарий 2 сделаю
+  вторым коммитом с исправлением в ticket-1-empty-cart, чтобы проверить новый
+  комментарий на каждый push. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Ветки запушены, но PR я создать не могу: gh не установлен, и токен я брать не
+  буду. Откройте, пожалуйста, три ссылки на compare и нажмите Create pull
+  request; пока вы это делаете, я слежу за прогонами Actions через публичный
+  API. · summary
+
+● Monitor(Actions runs in codementor-student-test)
+  ⎿  Monitor started · task bhncq14ht · timeout 1800s
+
+● Наблюдение запущено, оно присылает каждое изменение статуса прогонов. Когда
+  откроешь PR, прогоны появятся сами, и я разберу результаты. Сценарий 2
+  (исправление тикета 1 вторым коммитом в ту же ветку) запушу сама, когда
+  закончится первый прогон по ticket-1-empty-cart.
+
+  Что ожидаю по каждому PR:
+
+  ┌──────────────────────────┬──────────────────────────────────────────────┐
+  │            PR            │                   Ожидание                   │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ ticket-1-empty-cart      │ тесты красные, комментарий «Some ticket 1    │
+  │                          │ tests failed»                                │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ ticket-0-product-by-id   │ зелёный, комментарий «All ticket 0 tests     │
+  │                          │ passed»                                      │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ fix-stuff                │ красный сразу на первом шаге, ошибка про имя │
+  │                          │  ветки, без комментария                      │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ ticket-1-empty-cart +    │ новый, второй комментарий «passed», check    │
+  │ патч                     │ зелёный                                      │
+  └──────────────────────────┴──────────────────────────────────────────────┘
+
+✻ Churned for 55s · done 16:27
+
+※ recap: Мы проверяем к чекпоинту цепочку PR → тесты → комментарий на тестовом студенческом репозитории, три ветки уже запушены. Тебе нужно открыть три PR по ссылкам из моего прошлого сообщения, дальше прогоны отслеживаю я.
+
+● Monitor event: "Actions runs in codementor-student-test"
+  run 43209860889 pull_request ticket-1-empty-cart in_progress None
+
+● Первый прогон пошёл, по ticket-1-empty-cart. Жду, когда он закончится.
+
+✻ Brewed for 2s · done 16:31
+
+● Monitor event: "Actions runs in codementor-student-test"
+  run 43209860889 pull_request ticket-1-empty-cart completed failure
+
+● Прогон завершился с failure, как и ожидалось. Проверю, что упал именно шаг
+  тестов, а не что-то раньше, и что комментарий появился.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Сценарий 1 прошёл как задумано: 2 теста упали с 500, check покраснел. Теперь
+  пушу эталонный патч тикета 1 вторым коммитом в ту же ветку. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Исправление запушено в PR #1. Жду новый прогон и PR по тикету 0 и fix-stuff.
+
+✻ Churned for 25s · done 16:33
+
+● Monitor event: "Actions runs in codementor-student-test"
+  run 43209860889 pull_request ticket-1-empty-cart completed failure
+  run 43210152809 pull_request ticket-1-empty-cart in_progress None
+
+● Запустился новый прогон по PR #1 с исправлением. Жду результат.
+
+✻ Crunched for 1s · done 16:34
+
+● Monitor event: "Actions runs in codementor-student-test"
+  run 43210152809 pull_request ticket-1-empty-cart completed success
+  run 43210347173 pull_request ticket-0-product-by-id in_progress None
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Сценарий 2 прошёл: check зелёный, в PR #1 теперь два отдельных комментария,
+  failed, затем passed. Идёт прогон по тикету 0. Жду его и PR fix-stuff.
+
+✻ Cooked for 6s · done 16:35
+
+● Monitor event: "Actions runs in codementor-student-test"
+  run 43210347173 pull_request ticket-0-product-by-id completed success
+  run 43210738817 pull_request fix-stuff completed failure
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Все 4 сценария прошли как ожидалось. В workflow fix-stuff нашёлся мой недочёт:
+  шаг сбора логов запускается даже без выкачанного репозитория и добавляет
+  лишнюю ошибку выше настоящей причины. Также actions/upload-artifact@v4 на
+  устаревшем Node 20, сейчас проверю наличие новой версии. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Мажорные версии actions выросли с v4 до v7, что может изменить поведение,
+  поэтому выношу это отдельно. Сейчас исправляю баг со сбором логов: они
+  собираются только тогда, когда шаг запуска сервиса реально выполнялся. 
+  · summary
+
+● Stop Task  ⎿  prev=""
+     while true; do… · stopped
+
+● Update(.github\workflows\check.yml)
+  ⎿  Added 2 lines, removed 1 line
+      111            fi
+      112  
+      113        - name: Collect service logs
+      114 -        if: always()                                          
+      114 +        # Only if we tried to start the service (not when the 
+          +branch name was rejected).                                    
+      115 +        if: always() && (steps.service.outcome == 'success' ||
+          + steps.service.outcome == 'failure')                          
+      116          working-directory: student
+      117          run: docker compose logs --no-color > ../service.log 2
+           >&1 || true
+      118  
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Цепочка PR → тесты → комментарий работает в GitHub Actions на тестовом
+  репозитории. Все 4 сценария дали ожидаемый результат.
+
+  PR: #1 ticket-1-empty-cart, без исправления
+  Результат: ❌ check красный: 2 теста упали с got 500, третий (валидный заказ)
+    прошёл
+  Комментарий: result=failed
+  ────────────────────────────────────────
+  PR: #1, тот же PR + патч тикета 1 вторым коммитом
+  Результат: ✅ check зелёный
+  Комментарий: второй, отдельный комментарий result=passed, итого 2
+  ────────────────────────────────────────
+  PR: #2 ticket-0-product-by-id + патч 0
+  Результат: ✅ check зелёный
+  Комментарий: result=passed
+  ────────────────────────────────────────
+  PR: #3 fix-stuff
+  Результат: ❌ упал на шаге «Detect ticket from branch name», тесты и сборка не
+
+    запускались
+  Комментарий: нет, как и задумано
+
+  Сборка Docker, Flyway и тесты в Actions тоже отработали. Скрытые метки <!-- 
+  codementor:ticket=N;mode=check;result=... --> стоят в каждом комментарии.
+
+  Недочёт, который нашёлся в fix-stuff
+
+  Сообщение про имя ветки в аннотациях есть, но рядом с ним стояла лишняя
+  ошибка. Шаг сбора логов в моём workflow имел условие if: always() и
+  запускался, даже когда репозиторий студента не выкачан. Он падал с «No such
+  file or directory», и эта ошибка шла выше настоящей причины. Для студента это
+  путаница.
+
+  Исправила: логи теперь собираются, только если шаг запуска сервиса
+  действительно выполнялся. Коммит 21196c1 пока только локальный. Если согласна,
+  запушу его в code-mentor и перезапущу прогон fix-stuff, чтобы проверить, что
+  осталась одна понятная ошибка.
+
+  Что предлагаю ещё
+
+  1. Обновить версии actions. GitHub предупреждает, что
+     actions/upload-artifact@v4 работает на устаревшем Node 20. Сейчас актуальны
+     upload-artifact v7, checkout v7, setup-python v7. Скачок с v4 на v7 может
+     поменять поведение, поэтому лучше сделать это отдельным коммитом с
+     повторным прогоном сценариев. Это предупреждение, ничего не ломается.
+     Сделать сейчас или отложить?
+  2. Запись в DECISIONS.md про этот недочёт: if: always() нужно ограничивать
+     шагами, которые реально выполнялись. Записать?
+  3. Тестовый репозиторий. В codementor-student-test остаются открытыми PR
+     #1–#3. Предлагаю их не закрывать: пригодятся для отладки агента v0,
+     особенно PR #1 с историей failed → passed.
+
+  Агент v0 по таймлайну тоже стоит на 13–14 ноября. Начну с плана, когда
+  скажешь.
+
+✻ Cooked for 58s · done 16:38
+
+※ recap: Цель — к чекпоинту 16 ноября получить цепочку PR → тесты → комментарий, и она уже работает: все четыре сценария прошли в тестовом репозитории. Следующий шаг за тобой: разрешить push исправления workflow `21196c1` и перезапуск прогона `fix-stuff`.
+
+❯ Пушь 21196c1 и перезапусти fix-stuff, покажи результат.                       
+  Версии actions не трогаем до чекпоинта. Потом обновим отдельным коммитом, но  
+  сначала проверим на GitHub, что эти версии реально существуют.                
+  Запиши в DECISIONS.md недочёт с if: always().                                 
+  PR #1–#3 оставляем. Сделай ещё ветку ticket-1-agent-debug с багом (без        
+  исправления) и PR из неё: на ней будем отлаживать агента. PR открою сама.     
+  После этого обнови README/Commands, закоммить и запушь. Агента v0 начнём в    
+  новой сессии.                                                                 
+
+● Пушу исправление и даю новый коммит в fix-stuff. Новый push однозначно
+  запускает workflow с актуальным check.yml@main. Кнопка Re-run без авторизации
+  мне недоступна, а у неё к тому же есть вопрос, какую версию reusable workflow
+  она берёт.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Пока идёт прогон, создаю ветку ticket-1-agent-debug от main без исправления
+  бага; для PR нужен один коммит, поэтому добавляю заметку студента в README. 
+  · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Теперь D12 и обновление README и CLAUDE.md, пока идёт прогон.
+
+● Bash(cat >> DECISIONS.md <<'EOF'…)
+  ⎿   CLAUDE.md    |  4 ++++
+      DECISIONS.md | 23 +++++++++++++++++++++++
+      README.md    | 23 ++++++++++++++++++++++-
+      3 files changed, 49 insertions(+), 1 deletion(-)
+  ⎿  Updated CLAUDE.md (+4 -0)
+      67    or set `CODEMENTOR_BASE_URL`). On the untouched template, tic
+          ket tests are expected to fail.
+      68  - Check reference patches: `git apply --check --directory=templ
+          ate eval/reference/ticket-0.patch`
+      69  - Publish template (never pushes): `python scripts/publish_temp
+          late.py --target <clone of template repo> [--dry-run]`
+      70 +- Publish flow: create/clone the template repo, run the script 
+         +with `--dry-run`, let me                                       
+      71 +  review the list, run it without `--dry-run`, I push the templ
+         +ate repo myself.                                               
+      72 +- Pipeline check: PRs in `aruzhanusserbai/codementor-student-te
+         +st` (see README, "Related                                      
+      73 +  repositories"). Read runs and comments through the public Git
+         +Hub API; `gh` is not installed.                                
+      74  - Agent tests: `pytest agent/tests -v`
+      75  - Eval: `python eval/run_eval.py --model <model>`
+      76  
+  ⎿  Updated DECISIONS.md (+23 -0)
+      199  
+      200  **Note.** Claude flagged the comment as a possible hint before
+            publishing the
+      201  template; I decided to keep it.
+      202 +                                                              
+      203 +## D12 — Mistake: `if: always()` on a step that needs earlier 
+          +steps (12 Nov 2026)                                           
+      204 +                                                              
+      205 +**What happened.** In `check.yml` the step "Collect service lo
+          +gs" had                                                       
+      206 +`if: always()` and `working-directory: student`. For a PR from
+          + a branch with a                                              
+      207 +wrong name (`fix-stuff`), the job stops at "Detect ticket from
+          + branch name",                                                
+      208 +so the student repository is never checked out. The logs step 
+          +still ran and                                                 
+      209 +failed with "No such file or directory". In the PR checks its 
+          +annotation was                                                
+      210 +shown above the real message ("Branch 'fix-stuff' does not fol
+          +low the                                                       
+      211 +rule ..."), which would confuse a student.                    
+      212 +                                                              
+      213 +**How it was noticed.** Running the planned scenario 4 (`fix-s
+          +tuff`) in the                                                 
+      214 +test student repository and reading the job steps and annotati
+          +ons through the                                               
+      215 +GitHub API.                                                   
+      216 +                                                              
+      217 +**How it was fixed.** The step now runs only if the service st
+          +ep actually ran:                                              
+      218 +`if: always() && (steps.service.outcome == 'success' || steps.
+          +service.outcome == 'failure')`.                               
+      219 +Commit `21196c1`; verified by a new run on `fix-stuff`.       
+      220 +                                                              
+      221 +**Lesson.** `always()` means "even if the job already failed".
+          + A step with                                                  
+      222 +`always()` must check that everything it depends on (checkout,
+          + a started                                                    
+      223 +service) really happened. Claude wrote the original condition;
+          + the planned                                                  
+      224 +negative scenario caught it.                                  
+  ⎿  Updated README.md (+22 -1)
+       7  
+       8  Full plan: [PLAN.md](PLAN.md). Decisions log: [DECISIONS.md](DE
+          CISIONS.md).
+       9  
+      10 -> Status: early development (skeleton, template service, tests 
+         -for tickets 0–1).                                              
+      10 +> Status: early development. Template service, tests for ticket
+         +s 0–1 and the                                                  
+      11 +> PR check workflow work end to end; the mentor agent is not co
+         +nnected yet.                                                   
+      12  
+      13  ## Repository layout
+      14  
+     ...
+      70  `tickets/` into a local clone of the template repository and co
+          mmits. It never
+      71  pushes. Use `--dry-run` to see the file list first.
+      72  
+      73 +## Related repositories                                        
+      74 +                                                               
+      75 +| Repository | Role |                                          
+      76 +|------------|------|                                          
+      77 +| [shopflow-orders](https://github.com/aruzhanusserbai/shopflow
+         +-orders) | Template repository published from `template/` and `
+         +tickets/` |                                                    
+      78 +| [codementor-student-test](https://github.com/aruzhanusserbai/
+         +codementor-student-test) | Test student repository created from
+         + the template |                                                
+      79 +                                                               
+      80 +Open PRs in the test student repository, used to check the pipe
+         +line:                                                          
+      81 +                                                               
+      82 +| PR branch | Purpose | Expected check |                       
+      83 +|-----------|---------|----------------|                       
+      84 +| `ticket-1-empty-cart` | ticket 1 bug, then the reference fix 
+         +as a second commit | red, then green (two comments) |          
+      85 +| `ticket-0-product-by-id` | ticket 0 with the reference fix | 
+         +green |                                                        
+      86 +| `fix-stuff` | branch that breaks the naming rule | red at the
+         + first step, no comment |                                      
+      87 +| `ticket-1-agent-debug` | ticket 1 bug without a fix, for debu
+         +gging the agent | red |                                        
+      88 +                                                               
+      89  ## Branch naming rule
+      90  
+      91  Students work in branches named `ticket-<N>-<description>`
+     ...
+      108  
+      109  ## TODO
+      110  
+      111 +- [ ] After the 16 Nov checkpoint: update GitHub actions in `c
+          +heck.yml`                                                     
+      112 +      (`checkout`, `setup-python`, `upload-artifact` still use
+          + v4/v5; `upload-artifact@v4`                                  
+      113 +      runs on deprecated Node 20). First check on GitHub that 
+          +the new major versions exist,                                 
+      114 +      then update in a separate commit and re-run the four PR 
+          +scenarios.                                                    
+      115  - [ ] Add the Maven Wrapper (`mvnw`) to `template/` (needs net
+           work; blocked on 11 Nov).
+      116  - [x] Verify the full Docker path (12 Nov): `docker compose up
+            --build` builds the image,
+     … 1 more lines (ctrl+o to expand)
+
+● Проверяю новый прогон fix-stuff.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Исправление работает: шаг сбора логов пропускается, ошибка «No such file or
+  directory» ушла, и осталась только настоящая причина. Сейчас закоммичу и
+  запушу документацию. · summary
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Исправление 21196c1 запушено и проверено новым прогоном fix-stuff. Лишняя
+  ошибка исчезла, осталась только причина.
+
+  Повторный прогон fix-stuff (новый коммит d5c8ed9 в ветке): выполнились только
+  «Detect ticket from branch name» (failure) и служебные шаги. Сбор логов теперь
+  пропускается. В аннотациях осталось одно сообщение: Branch 'fix-stuff' does 
+  not follow the rule ticket-<N>-<description>.... Ошибки «No such file or
+  directory» больше нет. Комментариев в PR #3 по-прежнему 0, как и задумано.
+
+  Ветка ticket-1-agent-debug запушена. Она отходит от main с багом, в ней один
+  коммит — заметка в README, код не тронут. PR из неё:
+  https://github.com/aruzhanusserbai/codementor-student-test/compare/main...tick
+  et-1-agent-debug?expand=1
+
+  Документация (коммит 58bf784, запушен):
+  - DECISIONS.md: D12 про if: always(): что случилось, как заметили, как
+    исправили и вывод. Там отмечено, что исходное условие написала я, а поймал
+    его запланированный негативный сценарий.
+  - README:
+    - обновлён статус;
+    - новый раздел «Related repositories»: шаблон, тестовый репозиторий и
+      таблица из 4 PR с назначением и ожидаемым результатом;
+    - в TODO пункт про обновление actions после чекпоинта: сначала проверить на
+      GitHub, что версии существуют, потом отдельный коммит и повторный прогон
+      сценариев.
+  - CLAUDE.md, раздел Commands: порядок публикации шаблона и как проверять
+    цепочку (PR в тестовом репозитории, публичный API, gh не установлен).
+
+  Для новой сессии с агентом v0 уже есть:
+  - в каждом прогоне артефакт codementor-run с выводом тестов и логами сервиса;
+  - шаг-заглушка с комментарием, который агент заменит;
+  - PR из ticket-1-agent-debug как стенд для отладки.
+
+  Перед новой сессией стоит экспортировать этот разговор в agent-logs/02-...
+  командой /export. Скажи, когда будет готово, — проверю его на ключи и личные
+  данные, как и лог 01.
+
+✻ Churned for 1m 17s · done 16:43
