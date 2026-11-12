@@ -223,7 +223,7 @@ Commit `21196c1`; verified by a new run on `fix-stuff`.
 service) really happened. Claude wrote the original condition; the planned
 negative scenario caught it.
 
-## D13 — Product model: ERNIE 5.5 Flash Preview via OpenRouter (13 Nov 2026)
+## D13 — Product model: ERNIE 5.5 Flash Preview via OpenRouter (12 Nov 2026)
 
 **What.** The agent uses ERNIE 5.5 Flash Preview (free tier on OpenRouter) for
 development and the first end-to-end runs. The model id is not in the code: it
@@ -241,7 +241,7 @@ trains on requests and requires a user ID, so it is not used for student code
 by default. A paid model (Claude Haiku/Sonnet) stays the plan for the final
 eval and demo (PLAN.md, section 5).
 
-## D14 — The agent writes the comment; the workflow posts it (13 Nov 2026)
+## D14 — The agent writes the comment; the workflow posts it (12 Nov 2026)
 
 **What.** PLAN.md lists `post_comment` as an agent tool. In v0 it is not a
 tool: the agent returns its final answer, code wraps it into `comment.md`
@@ -260,7 +260,7 @@ result.
 original plan, but the model controls when and how often it posts and needs a
 token with write access.
 
-## D15 — Level 1 hint was too direct: stricter prompt rule (13 Nov 2026)
+## D15 — Level 1 hint was too direct: stricter prompt rule (12 Nov 2026)
 
 **What.** The first real local run (ticket 1, untouched template) found the
 right cause and gave no code, file or line number, but the level 1 hint
@@ -281,7 +281,7 @@ again.
 **Alternatives.** Leave the prompt as is and rely on post-processing: code can
 only remove code blocks, it cannot judge how direct a hint is.
 
-## D16 — Mistake: first CI agent run failed because of a setting (13 Nov 2026)
+## D16 — Mistake: first CI agent run failed because of a setting (12 Nov 2026)
 
 **What happened.** The first CI run of the agent (run 43219713901, PR #4 in
 the test student repository) exited with code 2: `CODEMENTOR_MODEL` was stored
