@@ -55,6 +55,16 @@ def build_user_message(ticket: int, ticket_text: str, test_output: str, log_text
     ])
 
 
+def report_error(message: str) -> None:
+    """Log an error; in GitHub Actions also show it as a public annotation.
+
+    Messages never contain the API key: config errors list variable names only.
+    """
+    log.error("%s", message)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::error title=CodeMentor agent::{message}", flush=True)
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CodeMentor agent, debugging mode")
     parser.add_argument("--ticket", type=int, required=True)
@@ -77,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = load_settings()
     except ConfigError as error:
-        log.error("%s", error)
+        report_error(str(error))
         return 2
     log.info("model: %s", settings.model)
 
@@ -98,14 +108,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_agent(OpenRouterClient(settings.api_key, settings.model), ctx, system_prompt, user_message)
     except Exception as error:  # API errors, rate limits: the workflow falls back
-        log.error("agent failed: %s: %s", type(error).__name__, error)
+        report_error(f"agent failed: {type(error).__name__}: {error}")
         return 1
 
     log.info("tool calls: %d, hit limit: %s", len(result.trace), result.hit_limit)
     if args.trace:
         args.trace.write_text(json.dumps([asdict(entry) for entry in result.trace], indent=2), encoding="utf-8")
     if not result.answer:
-        log.error("the model returned an empty answer")
+        report_error("the model returned an empty answer")
         return 1
 
     args.out.write_text(build_debugging_comment(args.ticket, HINT_LEVEL, result.answer, args.run_url), encoding="utf-8")
