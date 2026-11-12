@@ -17,7 +17,10 @@ by its id**. Right now we only have `GET /products`, which returns everything.
 2. Add the endpoint `GET /products/{id}`:
    - returns the product in the same format as one element of `GET /products`;
    - returns `404` in our standard error format if the product does not exist.
-3. Create a branch, commit, push and open a pull request.
+3. Create a branch named `ticket-0-<short-description>`, for example
+   `ticket-0-product-by-id`. Commit, push and open a pull request.
+   The automated checks find the ticket by the branch name, so the
+   `ticket-0-` prefix is required.
 
 ## Acceptance criteria
 

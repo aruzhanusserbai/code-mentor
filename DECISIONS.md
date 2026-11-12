@@ -133,3 +133,31 @@ the patches.
 temporary changes in the working tree. Better: make the baseline commit first
 and produce patches with `git diff` against a commit, or work in a separate
 copy.
+
+## D8 — Neutral error message in ticket 1 (12 Nov 2026)
+
+**What.** The example in `tickets/ticket-1.md` is now
+`"<what is wrong with the request>"`, and the ticket says the wording is up to
+the student.
+
+**Why.** The first version showed `"items: must not be empty"`. That is exactly
+the default message of `@NotEmpty` formatted by our error handler, so the
+ticket gave away the solution. Spotted by me in review, not by Claude.
+
+## D9 — Branch naming rule `ticket-<N>-<description>` (12 Nov 2026)
+
+**What.** Student branches must match `^ticket-([0-9]+)-[a-z0-9-]+$`.
+The workflow takes N from the branch name and runs only
+`tests/tickets/ticket_<N>`. The agent gets the ticket number from the same
+place. A branch that does not match, or an N without tests, fails the check
+with a message; tests and agent do not run.
+
+**Why.** Running all ticket tests on every PR would show failures of tickets
+the student has not started, and the agent would not know which ticket to
+help with. The branch name is something the student already sets, so no
+extra configuration is needed.
+
+**Alternatives.** (a) Ticket number in the PR title or a PR label: easy to
+forget or edit later, and labels need extra permissions. (b) Detect the ticket
+from changed files: unreliable, a fix can touch any file. (c) Run all tests
+and report per ticket: noisy and slower.

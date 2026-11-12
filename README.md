@@ -49,6 +49,16 @@ student's job is to make them pass. Health checks pass.
 Tests read the service address from `CODEMENTOR_BASE_URL`
 (default `http://localhost:8080`).
 
+## Branch naming rule
+
+Students work in branches named `ticket-<N>-<description>`
+(regex `^ticket-([0-9]+)-[a-z0-9-]+$`), for example `ticket-1-empty-cart`.
+
+- The workflow runs only the tests of that ticket: `tests/tickets/ticket_<N>`.
+- The agent gets the ticket number from the branch name.
+- A branch that does not match the rule, or a ticket number without tests,
+  fails the check with a clear message; the tests and the agent do not run.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in the values. `.env` is git-ignored.
