@@ -1,0 +1,171 @@
+# Reusable workflow called from student repositories (see
+# template/.github/workflows/codementor.yml). It starts the student's service,
+# runs the protected tests of the ticket taken from the branch name and posts
+# the result as a PR comment. The mentor agent will replace the comment step.
+
+name: CodeMentor check
+
+on:
+  workflow_call:
+    inputs:
+      platform_repo:
+        description: Repository with the protected tests
+        type: string
+        default: aruzhanusserbai/code-mentor
+      platform_ref:
+        description: Branch or tag of the platform repository to take tests from
+        type: string
+        default: main
+
+jobs:
+  check:
+    # PR comments (answer mode) are handled later; for now only PR events.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: codementor-${{ github.repository }}-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Detect ticket from branch name
+        id: ticket
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if [[ "$BRANCH" =~ ^ticket-([0-9]+)-[a-z0-9-]+$ ]]; then
+            echo "number=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "Ticket ${BASH_REMATCH[1]} (branch $BRANCH)"
+          else
+            message="Branch '$BRANCH' does not follow the rule ticket-<N>-<description>, for example ticket-1-empty-cart. Rename the branch and open the PR again."
+            echo "::error::$message"
+            echo "### CodeMentor: branch name not recognized" >> "$GITHUB_STEP_SUMMARY"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Check out student repository
+        uses: actions/checkout@v4
+        with:
+          path: student
+
+      - name: Check out platform tests
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.platform_repo }}
+          ref: ${{ inputs.platform_ref }}
+          path: codementor
+
+      - name: Check that tests exist for this ticket
+        env:
+          TICKET: ${{ steps.ticket.outputs.number }}
+        run: |
+          if [ ! -d "codementor/tests/tickets/ticket_${TICKET}" ]; then
+            message="There are no tests for ticket ${TICKET}. Check the ticket number in the branch name."
+            echo "::error::$message"
+            echo "### CodeMentor: unknown ticket" >> "$GITHUB_STEP_SUMMARY"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Start the service
+        id: service
+        working-directory: student
+        continue-on-error: true
+        run: docker compose up -d --build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r codementor/tests/requirements.txt
+
+      - name: Run ticket tests
+        id: tests
+        if: steps.service.outcome == 'success'
+        env:
+          TICKET: ${{ steps.ticket.outputs.number }}
+          CODEMENTOR_BASE_URL: http://localhost:8080
+        run: |
+          set +e
+          python -m pytest "codementor/tests/tickets/ticket_${TICKET}" -v --tb=short -p no:cacheprovider 2>&1 | tee test-output.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -eq 0 ]; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide result
+        id: result
+        env:
+          SERVICE_OUTCOME: ${{ steps.service.outcome }}
+          TEST_RESULT: ${{ steps.tests.outputs.result }}
+        run: |
+          if [ "$SERVICE_OUTCOME" != "success" ]; then
+            echo "value=build_failed" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$TEST_RESULT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect service logs
+        if: always()
+        working-directory: student
+        run: docker compose logs --no-color > ../service.log 2>&1 || true
+
+      - name: Upload test output and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codementor-run
+          path: |
+            test-output.txt
+            service.log
+          if-no-files-found: ignore
+
+      # Placeholder until the mentor agent is connected: one new comment per run.
+      # The hidden marker uses mode=check, so the agent will not count these
+      # comments when it picks the next hint level (it counts mode=debugging).
+      - name: Comment on the pull request
+        if: steps.result.outputs.value != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TICKET: ${{ steps.ticket.outputs.number }}
+          RESULT: ${{ steps.result.outputs.value }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT" in
+            passed) headline="All ticket ${TICKET} tests passed." ;;
+            failed) headline="Some ticket ${TICKET} tests failed." ;;
+            *)      headline="The service did not build or start, so the tests did not run." ;;
+          esac
+          {
+            echo "<!-- codementor:ticket=${TICKET};mode=check;result=${RESULT} -->"
+            echo "### CodeMentor check: ticket ${TICKET}"
+            echo
+            echo "$headline"
+            if [ -f test-output.txt ]; then
+              echo
+              echo "<details><summary>Test summary</summary>"
+              echo
+              echo '```'
+              grep -E "PASSED|FAILED|ERROR|passed|failed" test-output.txt | tail -n 20
+              echo '```'
+              echo
+              echo "</details>"
+            fi
+            echo
+            echo "Full output and service logs: [workflow run](${RUN_URL})."
+          } > comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+
+      - name: Fail the check if tests did not pass
+        if: steps.result.outputs.value != 'passed'
+        env:
+          RESULT: ${{ steps.result.outputs.value }}
+        run: |
+          echo "::error::Result: $RESULT"
+          exit 1
