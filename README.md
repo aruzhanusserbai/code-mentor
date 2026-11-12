@@ -92,7 +92,6 @@ Copy `.env.example` to `.env` and fill in the values. `.env` is git-ignored.
 ## TODO
 
 - [ ] Add the Maven Wrapper (`mvnw`) to `template/` (needs network; blocked on 11 Nov).
-- [ ] Verify the full Docker path: `docker compose up --build` in `template/` and the
-      ticket 0–1 tests against it, including Flyway migrations. On 11 Nov only an offline
-      run was possible (local Maven cache, schema applied with `psql`). If the local network
-      is still too slow, verify in GitHub Actions on 13–14 Nov.
+- [x] Verify the full Docker path (12 Nov): `docker compose up --build` builds the image,
+      Flyway applies both migrations on a clean database; ticket 0–1 tests fail on the
+      template (3 failed, 3 passed) and all 6 pass with both reference patches.
