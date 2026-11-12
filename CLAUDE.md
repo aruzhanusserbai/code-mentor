@@ -67,6 +67,10 @@ you. I must be able to explain every line, so keep code simple and readable.
   or set `CODEMENTOR_BASE_URL`). On the untouched template, ticket tests are expected to fail.
 - Check reference patches: `git apply --check --directory=template eval/reference/ticket-0.patch`
 - Publish template (never pushes): `python scripts/publish_template.py --target <clone of template repo> [--dry-run]`
+- Publish flow: create/clone the template repo, run the script with `--dry-run`, let me
+  review the list, run it without `--dry-run`, I push the template repo myself.
+- Pipeline check: PRs in `aruzhanusserbai/codementor-student-test` (see README, "Related
+  repositories"). Read runs and comments through the public GitHub API; `gh` is not installed.
 - Agent tests: `pytest agent/tests -v`
 - Eval: `python eval/run_eval.py --model <model>`
 

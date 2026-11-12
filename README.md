@@ -7,7 +7,8 @@ never with solution code.
 
 Full plan: [PLAN.md](PLAN.md). Decisions log: [DECISIONS.md](DECISIONS.md).
 
-> Status: early development (skeleton, template service, tests for tickets 0–1).
+> Status: early development. Template service, tests for tickets 0–1 and the
+> PR check workflow work end to end; the mentor agent is not connected yet.
 
 ## Repository layout
 
@@ -69,6 +70,22 @@ repository. On every push to a PR it:
 `tickets/` into a local clone of the template repository and commits. It never
 pushes. Use `--dry-run` to see the file list first.
 
+## Related repositories
+
+| Repository | Role |
+|------------|------|
+| [shopflow-orders](https://github.com/aruzhanusserbai/shopflow-orders) | Template repository published from `template/` and `tickets/` |
+| [codementor-student-test](https://github.com/aruzhanusserbai/codementor-student-test) | Test student repository created from the template |
+
+Open PRs in the test student repository, used to check the pipeline:
+
+| PR branch | Purpose | Expected check |
+|-----------|---------|----------------|
+| `ticket-1-empty-cart` | ticket 1 bug, then the reference fix as a second commit | red, then green (two comments) |
+| `ticket-0-product-by-id` | ticket 0 with the reference fix | green |
+| `fix-stuff` | branch that breaks the naming rule | red at the first step, no comment |
+| `ticket-1-agent-debug` | ticket 1 bug without a fix, for debugging the agent | red |
+
 ## Branch naming rule
 
 Students work in branches named `ticket-<N>-<description>`
@@ -91,6 +108,10 @@ Copy `.env.example` to `.env` and fill in the values. `.env` is git-ignored.
 
 ## TODO
 
+- [ ] After the 16 Nov checkpoint: update GitHub actions in `check.yml`
+      (`checkout`, `setup-python`, `upload-artifact` still use v4/v5; `upload-artifact@v4`
+      runs on deprecated Node 20). First check on GitHub that the new major versions exist,
+      then update in a separate commit and re-run the four PR scenarios.
 - [ ] Add the Maven Wrapper (`mvnw`) to `template/` (needs network; blocked on 11 Nov).
 - [x] Verify the full Docker path (12 Nov): `docker compose up --build` builds the image,
       Flyway applies both migrations on a clean database; ticket 0–1 tests fail on the

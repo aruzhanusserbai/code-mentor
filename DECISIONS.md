@@ -199,3 +199,26 @@ we train; the skill is reading code and finding where invalid input gets in.
 
 **Note.** Claude flagged the comment as a possible hint before publishing the
 template; I decided to keep it.
+
+## D12 — Mistake: `if: always()` on a step that needs earlier steps (12 Nov 2026)
+
+**What happened.** In `check.yml` the step "Collect service logs" had
+`if: always()` and `working-directory: student`. For a PR from a branch with a
+wrong name (`fix-stuff`), the job stops at "Detect ticket from branch name",
+so the student repository is never checked out. The logs step still ran and
+failed with "No such file or directory". In the PR checks its annotation was
+shown above the real message ("Branch 'fix-stuff' does not follow the
+rule ..."), which would confuse a student.
+
+**How it was noticed.** Running the planned scenario 4 (`fix-stuff`) in the
+test student repository and reading the job steps and annotations through the
+GitHub API.
+
+**How it was fixed.** The step now runs only if the service step actually ran:
+`if: always() && (steps.service.outcome == 'success' || steps.service.outcome == 'failure')`.
+Commit `21196c1`; verified by a new run on `fix-stuff`.
+
+**Lesson.** `always()` means "even if the job already failed". A step with
+`always()` must check that everything it depends on (checkout, a started
+service) really happened. Claude wrote the original condition; the planned
+negative scenario caught it.
