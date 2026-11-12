@@ -179,3 +179,23 @@ the hint levels depend on.
 
 **Note for answer mode (17–23 Nov).** Reply only to comments by the PR author;
 ignore comments by bots (including our own) and by anyone else.
+
+## D11 — Keep the "currency from the first product" comment in OrderService (12 Nov 2026)
+
+**What.** `OrderService.java` line 39 keeps the comment
+`// one order = one currency, we take it from the first product`, directly
+above the `items.get(0)` line that causes the ticket 1 bug. The line number in
+`eval/bugs/labels.yaml` (40) stays the same.
+
+**Why.** The comment explains the *intent* of the code (why the first item is
+read), not the bug: it says nothing about empty or missing lists. Real code
+has comments like this, and the template should look realistic. The student
+still has to connect the stack trace (`IndexOutOfBoundsException` /
+`NullPointerException` at line 40) with the missing validation on the request.
+
+**Alternatives.** Remove the comment so the line draws less attention.
+Rejected: the code would look less natural, and hiding intent is not the skill
+we train; the skill is reading code and finding where invalid input gets in.
+
+**Note.** Claude flagged the comment as a possible hint before publishing the
+template; I decided to keep it.
