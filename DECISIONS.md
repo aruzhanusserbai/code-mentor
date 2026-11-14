@@ -365,3 +365,11 @@ that; code only blocks the obvious leaks.
 
 **Alternatives.** Ask the model to list forbidden identifiers itself: it
 decides what it may say, which is the thing we want to check.
+
+**Amendment (14 Nov 2026).** Text in backticks counts only if it looks like
+code: no spaces or slashes, and not a single word, acronym or number
+(`` `items` ``, `` `500` ``, `` `/orders` `` do not count; `` `items.get(0)` ``,
+`` `total_price` `` do). Models put field names in backticks almost always, so
+the original rule would have banned plain words again. Check results in logs
+and the trace are reason codes only (`leaks_identifiers`, `too_long`), never
+the identifiers, because they come from the diagnosis (D18).
