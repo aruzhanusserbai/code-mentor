@@ -37,6 +37,13 @@ The exact wording of the message is up to you.
 - `POST /orders` without `items` → `400` with a non-empty `error` message.
 - Valid orders are still created with `201`.
 
+## Useful reading
+
+If you have not worked with Bean Validation in Spring before, read the
+official introduction:
+[Java Bean Validation](https://docs.spring.io/spring-framework/reference/core/validation/beanvalidation.html)
+(Spring Framework reference).
+
 ## Branch
 
 Work in a branch named `ticket-1-<short-description>`,
