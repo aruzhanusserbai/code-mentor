@@ -324,6 +324,10 @@ different problem: they may get a level 3 hint for a problem they see for the
 first time. Possible improvement later: reset the level when the set of failed
 tests changes (store it in the marker).
 
+**Amendment (14 Nov 2026).** A comment counts only if the API author is
+`github-actions[bot]` with `type: Bot` **and** the marker starts the comment
+body; quotes of old hints in other users' comments never count.
+
 ## D18 — The diagnosis is never published in CI, only in the local eval (12 Nov 2026)
 
 **What.** The agent answers with `{diagnosis, hint_1, hint_2, hint_3}`. In CI
