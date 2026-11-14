@@ -423,3 +423,87 @@ error. Use the highest level: the opposite of what the levels are for.
 
 **Who decided.** I set the rule; Claude applied it to empty output first, and
 the workflow step follows the same principle.
+
+## D22 — Level 2 check: no code name together with an action word (14 Nov 2026)
+
+**What.** Level 2 may name the file, class, method and exception, but not say
+what to change. Code checks every sentence of `hint_2`: if it names a code
+identifier from the diagnosis (same rule as D19) **and** contains an action
+word, the hint fails with the reason code `gives_action`. Action words: "add",
+"should", "must", "need(s) to", "replace", "use", "change", "put", "annotate",
+"remove", and words of absence: "missing", "lacks", "without",
+"no constraint/validation/check/annotation/rule", "nothing
+rejects/checks/validates". The sentence limit (5) is checked as well. A failed
+hint is handled like level 1: one regeneration (one request, no tools), then a
+general level 2 fallback. The sentence limits of all levels now live in
+`checks.MAX_SENTENCES` (`{1: 3, 2: 5, 3: 6}`, formerly `MAX_SENTENCES_LEVEL_1`)
+and are filled into the prompts.
+
+**Why.** Real run 02 (eval/examples/real-run-02-ticket-1.md) published a
+level 2 hint whose last sentence was almost the fix: "CreateOrderRequest
+declares the items field with only @Valid and no constraint on the list
+itself, so nothing rejects these payloads". The first idea, a list of
+imperatives only ("add", "should", "replace", "use"), would not catch it:
+that sentence says what is *missing*, not what to *do*. That is why the
+absence words are in the list; the real hint is the main unit test.
+
+**Limits.** A heuristic: a sentence with an action word but no code name
+passes ("What should happen to such a request instead?"), and a fix described
+without code names is not caught. Words like "only" or "absent" are too common
+to ban. The eval (no-spoiler rate per level) measures what code cannot.
+
+**On D15.** D15 says not to change a prompt after one run. This is not a
+prompt rewrite: the rules for level 2 stay the same, code now enforces them,
+as D19 does for level 1.
+
+**Alternatives.** Ban every code name at level 2: then level 2 cannot show the
+location, which is its whole point. Ask a second model to judge the hint: an
+extra request on every run and not deterministic.
+**Amendment (14 Nov 2026, real run 03).** The first local run flagged a good
+level 2 hint because of "use its currency" and "returns 500 instead of a
+400" (eval/examples/real-run-03-ticket-1.md). "instead" is removed from the
+list: "X instead of Y" is the normal way to state the actual result against
+the expected one, a structural pattern of every failure description, not a
+sign of a fix. "use" stays: it is a real imperative in "use the ... annotation"
+and only a plain verb elsewhere; the eval decides from the regeneration rate.
+
+**Observation, not fixed now.** In real runs 02 and 03 the investigation used
+all 10 of 10 tool calls, both times with reads that are not needed for the
+cause (`pom.xml`, `OrderItem.java`, `InvalidOrderException.java`,
+`ErrorResponse.java`, `CONTRACT.md`). The cause was still found. To watch in
+the eval and for ticket 2: if the limit gets tight, look at the investigation
+part of the prompt before raising the limit.
+
+## D23 — Level 3 check: no annotation and no method names (14 Nov 2026)
+
+**What.** `hint_3` fails with `leaks_identifiers` if it names an annotation or
+a method call from the diagnosis, or **any** annotation at all (`@Size`,
+`@NotEmpty`, ...). Class and file names are allowed. Limit: 6 sentences.
+Regeneration and fallback as for levels 1 and 2.
+
+**Why.** Level 3 explains the idea of the fix; the exact annotation or method
+is what the student must find. Reusing the full level 1 rule (all code names
+from the diagnosis) would ban `CreateOrderRequest` and `OrderService`, which
+level 2 has already named, so level 3 would be vaguer than level 2 and fall
+back often. And the annotation of the fix is often not in the diagnosis at
+all, so only checking diagnosis names would miss it.
+
+**Who decided.** I asked to reuse the level 1 function; Claude pointed out
+both problems, and I chose this variant.
+
+## D24 — No level 4: no automatic full answer (14 Nov 2026)
+
+**What.** Level 3 is the last hint level. We considered posting the full
+answer (or the fix) automatically after three failed attempts and rejected
+it. Instead: general reading on the topic in the ticket itself (ticket 1:
+"Useful reading", the Spring Framework page on Java Bean Validation, nothing
+about the specific fix) and a student chat for people who are stuck. When the
+level 3 hint is a general fallback, the comment points to both instead of
+promising a more specific hint.
+
+**Why.** The point of the platform is that the student finds the solution
+themselves. An automatic answer after a fixed number of pushes would teach
+students to push three times and wait. A person in a chat can see what the
+student has already tried.
+
+**Who decided.** I. The chat is my part (organisation, not code).

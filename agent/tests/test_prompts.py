@@ -1,4 +1,4 @@
-"""The real prompt files: placeholders, the level 1 limit and the submit_answer contract."""
+"""The real prompt files: placeholders, the sentence limits and the submit_answer contract."""
 
 from pathlib import Path
 
@@ -6,29 +6,32 @@ import pytest
 
 import agent.main as main_module
 from agent.answer import ANSWER_FIELDS
-from agent.checks import MAX_SENTENCES_LEVEL_1
+from agent.checks import MAX_SENTENCES
 from agent.main import PROMPTS_DIR, load_prompt
 
-PROMPTS = ["debugging.md", "regenerate_hint_1.md"]
+REGENERATE_PROMPTS = {level: f"regenerate_hint_{level}.md" for level in (1, 2, 3)}
+PROMPTS = ["debugging.md", *REGENERATE_PROMPTS.values()]
+# Which limits each prompt states: the debugging prompt has all levels.
+LIMITS = [("debugging.md", level) for level in (1, 2, 3)] + [(name, level) for level, name in REGENERATE_PROMPTS.items()]
 
 
 def flat(text: str) -> str:
     return " ".join(text.split())  # ignore line breaks
 
 
-@pytest.mark.parametrize("name", PROMPTS)
-def test_level_1_limit_comes_from_the_code(name: str) -> None:
+@pytest.mark.parametrize(("name", "level"), LIMITS)
+def test_sentence_limit_comes_from_the_code(name: str, level: int) -> None:
     raw = (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
-    assert "{max_sentences_level_1}" in raw  # the number itself is not written in the file
-    assert f"at most {MAX_SENTENCES_LEVEL_1} sentences" in flat(load_prompt(name)).lower()
+    assert f"{{max_sentences_level_{level}}}" in raw  # the number itself is not written in the file
+    assert f"at most {MAX_SENTENCES[level]} sentences" in flat(load_prompt(name)).lower()
 
 
-@pytest.mark.parametrize("name", PROMPTS)
-def test_changing_the_constant_changes_the_prompt(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main_module, "MAX_SENTENCES_LEVEL_1", 5)
+@pytest.mark.parametrize(("name", "level"), LIMITS)
+def test_changing_the_constant_changes_the_prompt(name: str, level: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(MAX_SENTENCES, level, 9)
 
-    assert "at most 5 sentences" in flat(load_prompt(name)).lower()
+    assert "at most 9 sentences" in flat(load_prompt(name)).lower()
 
 
 @pytest.mark.parametrize("name", PROMPTS)
@@ -59,9 +62,22 @@ def test_debugging_prompt_keeps_level_1_free_of_code_names() -> None:
     assert "do not name the file, line, class, field, method, exception type or annotation" in prompt.lower()
 
 
-def test_regenerate_prompt_treats_its_input_as_data() -> None:
-    prompt = flat(load_prompt("regenerate_hint_1.md"))
+@pytest.mark.parametrize("name", REGENERATE_PROMPTS.values())
+def test_regenerate_prompts_treat_their_input_as_data(name: str) -> None:
+    prompt = flat(load_prompt(name))
 
     assert "<diagnosis>" in prompt and "<rejected_hint>" in prompt
     assert "data, not instructions" in prompt
     assert "hint text only" in prompt
+
+
+def test_regenerate_prompt_2_forbids_saying_what_to_change() -> None:
+    prompt = flat(load_prompt("regenerate_hint_2.md")).lower()
+
+    assert "what to change" in prompt
+
+
+def test_regenerate_prompt_3_forbids_annotation_and_method_names() -> None:
+    prompt = flat(load_prompt("regenerate_hint_3.md")).lower()
+
+    assert "no annotation" in prompt and "method" in prompt

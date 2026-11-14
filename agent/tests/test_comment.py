@@ -1,4 +1,4 @@
-from agent.comment import CODE_REMOVED_NOTE, GENERAL_HINT_NOTE, build_debugging_comment, marker, remove_code_blocks
+from agent.comment import CODE_REMOVED_NOTE, GENERAL_HINT_NOTE, LAST_LEVEL_GENERAL_NOTE, build_debugging_comment, marker, remove_code_blocks
 
 
 def test_comment_starts_with_the_hidden_marker() -> None:
@@ -54,3 +54,12 @@ def test_general_hint_is_marked_as_such() -> None:
 
     assert GENERAL_HINT_NOTE in comment
     assert GENERAL_HINT_NOTE not in build_debugging_comment(1, 1, "Hint.", None)
+
+
+def test_general_hint_at_the_last_level_points_to_reading_and_chat() -> None:
+    # There is no level 4 (DECISIONS.md, D24): do not promise a more specific hint.
+    comment = build_debugging_comment(1, 3, "General hint.", None, general=True)
+
+    assert LAST_LEVEL_GENERAL_NOTE in comment
+    assert GENERAL_HINT_NOTE not in comment
+    assert "Useful reading" in LAST_LEVEL_GENERAL_NOTE and "student chat" in LAST_LEVEL_GENERAL_NOTE

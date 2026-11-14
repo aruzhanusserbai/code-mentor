@@ -131,3 +131,13 @@ def test_full_answer_is_saved_for_local_eval_runs(make_args, tmp_path: Path) -> 
     assert code == 0
     saved = json.loads(full.read_text(encoding="utf-8"))
     assert saved == {"answer": ANSWER, "level": 2, "published_hint": ANSWER["hint_2"], "hint_status": "ok"}
+
+
+def test_regeneration_uses_the_prompt_of_the_selected_level(make_args) -> None:
+    leaky = {**ANSWER, "hint_2": "OrderService should check the list."}
+    llm = FakeLLM([tool_reply(submit(leaky)), text_reply("The request fails in OrderService.")])
+
+    code = run(make_args("--level", "2"), llm)
+
+    assert code == 0
+    assert llm.requests[1]["messages"][0]["content"] == "regenerate prompt 2"

@@ -1,9 +1,14 @@
-"""Code checks for the level 1 hint (see DECISIONS.md, D19).
+"""Code checks for the hints of every level (see DECISIONS.md, D19, D22, D23).
 
-Level 1 must be a nudge: no code names from the diagnosis and at most
-MAX_SENTENCES_LEVEL_1 sentences. Only code-like tokens count as identifiers,
-because plain English words such as "items" or "total" cannot be told apart
-from normal text.
+- Level 1, a nudge: no code names from the diagnosis (D19).
+- Level 2, the location: code names are allowed, but no sentence may name
+  code from the diagnosis together with an action word ("add", "missing",
+  "no constraint", ...), because that says what to change (D22).
+- Level 3, the concept: no annotation and no method call names (D23).
+- Every level: at most MAX_SENTENCES[level] sentences.
+
+Only code-like tokens count as identifiers, because plain English words such
+as "items" or "total" cannot be told apart from normal text.
 """
 
 import re
@@ -11,8 +16,8 @@ from dataclasses import dataclass, field
 
 from agent.answer import Answer
 
-# The single source of the level 1 length limit: the prompts must use this value.
-MAX_SENTENCES_LEVEL_1 = 3
+# The single source of the length limits: the prompts must use these values.
+MAX_SENTENCES = {1: 3, 2: 5, 3: 6}
 
 BACKTICKS = re.compile(r"`([^`\n]+)`")
 # Code-like text inside backticks: Java-ish characters, no spaces or slashes.
@@ -28,6 +33,16 @@ ANNOTATION = re.compile(r"(?<!\w)@[A-Za-z]\w*")  # @NotEmpty
 
 ABBREVIATION = re.compile(r"\b(?:e\.g|i\.e|etc|vs|cf)\.", re.IGNORECASE)
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+HIDDEN_DOT = "\x00"  # never appears in model text
+
+# Level 2: words that say what to change or what is missing (whole words, any case).
+ACTION_WORDS = re.compile(
+    r"\b(?:add|adding|should|must|need to|needs to|replace|use|change|put|annotate|remove"
+    r"|missing|lacks?|lacking|without"
+    r"|no (?:constraints?|validations?|checks?|annotations?|rules?)"
+    r"|nothing (?:rejects|checks|validates))\b",
+    re.IGNORECASE,
+)
 
 
 def code_identifiers(text: str) -> set[str]:
@@ -56,19 +71,39 @@ def find_leaks(hint: str, identifiers: set[str]) -> list[str]:
     return sorted(name for name in identifiers if leak_pattern(name).search(hint))
 
 
-def count_sentences(text: str) -> int:
+def annotations_and_calls(text: str) -> set[str]:
+    """Level 3 identifiers: only annotations (@NotEmpty) and method calls (get(int))."""
+    return set(ANNOTATION.findall(text)) | set(CALL.findall(text))
+
+
+def split_sentences(text: str) -> list[str]:
     """Sentences end with . ! or ? followed by a space or the end of the text.
 
     Dots inside numbers (1.5) and file names (OrderService.java) are not
-    followed by a space; common abbreviations (e.g., i.e., etc.) are masked.
+    followed by a space. The dots of common abbreviations (e.g., i.e., etc.)
+    are hidden while splitting and put back afterwards.
     """
-    masked = ABBREVIATION.sub("ABBR", text.strip())
-    return len([part for part in SENTENCE_END.split(masked) if part.strip()])
+    hidden = ABBREVIATION.sub(lambda match: match.group().replace(".", HIDDEN_DOT), text.strip())
+    parts = SENTENCE_END.split(hidden)
+    return [part.replace(HIDDEN_DOT, ".") for part in parts if part.strip()]
+
+
+def count_sentences(text: str) -> int:
+    return len(split_sentences(text))
+
+
+def count_action_sentences(hint: str, identifiers: set[str]) -> int:
+    """Sentences that name code from the diagnosis and also say what to change (level 2)."""
+    return sum(
+        1 for sentence in split_sentences(hint) if find_leaks(sentence, identifiers) and ACTION_WORDS.search(sentence)
+    )
 
 
 @dataclass
 class HintCheck:
+    level: int
     leaks: list[str] = field(default_factory=list)
+    action_sentences: int = 0
     sentences: int = 0
 
     @property
@@ -80,13 +115,24 @@ class HintCheck:
         reasons = []
         if self.leaks:
             reasons.append("leaks_identifiers")
-        if self.sentences > MAX_SENTENCES_LEVEL_1:
+        if self.action_sentences:
+            reasons.append("gives_action")
+        if self.sentences > MAX_SENTENCES[self.level]:
             reasons.append("too_long")
         return reasons
 
 
-def check_hint_1(answer: Answer) -> HintCheck:
-    return HintCheck(
-        leaks=find_leaks(answer.hint_1, code_identifiers(answer.diagnosis)),
-        sentences=count_sentences(answer.hint_1),
-    )
+def check_hint(answer: Answer, level: int) -> HintCheck:
+    if level not in MAX_SENTENCES:
+        raise ValueError(f"unknown hint level: {level}")
+    hint = answer.hint(level)
+    result = HintCheck(level=level, sentences=count_sentences(hint))
+    if level == 1:
+        result.leaks = find_leaks(hint, code_identifiers(answer.diagnosis))
+    elif level == 2:
+        result.action_sentences = count_action_sentences(hint, code_identifiers(answer.diagnosis))
+    else:
+        # Any annotation counts: the annotation of the fix is often not in the diagnosis.
+        forbidden = annotations_and_calls(answer.diagnosis) | set(ANNOTATION.findall(hint))
+        result.leaks = find_leaks(hint, forbidden)
+    return result

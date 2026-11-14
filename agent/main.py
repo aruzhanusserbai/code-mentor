@@ -23,7 +23,7 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
-from agent.checks import MAX_SENTENCES_LEVEL_1
+from agent.checks import MAX_SENTENCES
 from agent.comment import build_debugging_comment
 from agent.config import ConfigError, load_dotenv, load_settings
 from agent.hints import HintResult, select_hint
@@ -45,7 +45,8 @@ def tail(text: str, limit: int = MAX_INPUT_CHARS) -> str:
 def load_prompt(name: str) -> str:
     """Read a prompt and fill in the values that code also checks, so they cannot drift apart."""
     text = (PROMPTS_DIR / name).read_text(encoding="utf-8")
-    text = text.replace("{max_sentences_level_1}", str(MAX_SENTENCES_LEVEL_1))
+    for level, limit in MAX_SENTENCES.items():
+        text = text.replace(f"{{max_sentences_level_{level}}}", str(limit))
     left = re.findall(r"\{[a-z_0-9]+\}", text)
     if left:
         raise ValueError(f"unknown placeholders in {name}: {', '.join(left)}")
@@ -144,7 +145,7 @@ def run(args: argparse.Namespace, llm: LLMClient) -> int:
         read_optional(args.log),
     )
     system_prompt = load_prompt("debugging.md")
-    regenerate_prompt = load_prompt("regenerate_hint_1.md")
+    regenerate_prompt = load_prompt(f"regenerate_hint_{args.level}.md")
 
     try:
         result = run_agent(llm, ctx, system_prompt, user_message)

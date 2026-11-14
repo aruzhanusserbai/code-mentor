@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.hints import FALLBACK_HINT_1
+from agent.hints import FALLBACK_HINTS
 from agent.main import run
 from agent.tests.fake_llm import FakeLLM, text_reply, tool_reply
 
@@ -79,11 +79,31 @@ def test_rejected_level_1_hints_are_not_published(
     code = run(make_args("--level", "1"), llm)
 
     assert code == 0
-    assert FALLBACK_HINT_1 in (tmp_path / "comment.md").read_text(encoding="utf-8")
+    assert FALLBACK_HINTS[1] in (tmp_path / "comment.md").read_text(encoding="utf-8")
     output = public_output(tmp_path, capsys, caplog)
     for sentinel in [*SENTINELS.values(), "SENTINEL-REGENERATED", "OrderService"]:
         assert sentinel not in output
 
+
+
+def test_rejected_level_2_hints_are_not_published(
+    make_args, in_ci, tmp_path: Path, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("DEBUG")
+    leaky = {
+        **ANSWER,
+        "diagnosis": "SENTINEL-DIAGNOSIS: OrderService reads the first item.",
+        "hint_2": "SENTINEL-HINT-2 OrderService should check the list.",
+    }
+    llm = FakeLLM([tool_reply(submit(leaky)), text_reply("SENTINEL-REGENERATED OrderService must add a check.")])
+
+    code = run(make_args("--level", "2"), llm)
+
+    assert code == 0
+    assert FALLBACK_HINTS[2] in (tmp_path / "comment.md").read_text(encoding="utf-8")
+    output = public_output(tmp_path, capsys, caplog)
+    for sentinel in [*SENTINELS.values(), "SENTINEL-REGENERATED", "OrderService"]:
+        assert sentinel not in output
 
 def test_invalid_answers_are_not_published(
     make_args, in_ci, tmp_path: Path, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture

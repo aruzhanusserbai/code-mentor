@@ -41,13 +41,13 @@ and why the tests see this result. Be precise; it is used to check the hints.
 
 ## `hint_2`: the location
 
-- Up to 5 sentences. Name the file and the class or method where the problem
+- At most {max_sentences_level_2} sentences. Name the file and the class or method where the problem
   shows up, and the exception if there is one. Explain what happens there with
   the failing request, but not what to change.
 
 ## `hint_3`: the concept
 
-- Up to 6 sentences. Explain the idea the fix needs (for example which inputs
+- At most {max_sentences_level_3} sentences. Explain the idea the fix needs (for example which inputs
   must be rejected, at which layer, and why that gives the expected status
   code), so the student can write the fix themselves. Still no code and no
   exact annotation or method to add.
