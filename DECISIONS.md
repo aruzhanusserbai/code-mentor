@@ -281,6 +281,12 @@ again.
 **Alternatives.** Leave the prompt as is and rely on post-processing: code can
 only remove code blocks, it cannot judge how direct a hint is.
 
+**Update (14 Nov 2026).** Level 1 may no longer name the exception type
+either; it describes the error in plain words. Otherwise the prompt would
+contradict the identifier check of D19, which treats `*Exception` names as
+code. The sentence limit is filled in from `checks.MAX_SENTENCES_LEVEL_1`, so
+the prompt and the check cannot drift apart.
+
 ## D16 — Mistake: first CI agent run failed because of a setting (12 Nov 2026)
 
 **What happened.** The first CI run of the agent (run 43219713901, PR #4 in
