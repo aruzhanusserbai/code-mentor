@@ -7,6 +7,11 @@ Example (from the platform repository root):
 
 Exit code 0 means comment.md was written. Any other code means the workflow
 should fall back to the plain test result comment.
+
+In CI only the hint of the selected level leaves this process (DECISIONS.md,
+D18): the diagnosis and the other hints are never printed, logged or traced.
+--full-answer-out saves the whole answer for local eval runs and is refused
+when GITHUB_ACTIONS=true.
 """
 
 import argparse
@@ -19,13 +24,13 @@ from pathlib import Path
 
 from agent.comment import build_debugging_comment
 from agent.config import ConfigError, load_dotenv, load_settings
-from agent.llm import OpenRouterClient
-from agent.loop import run_agent
+from agent.hints import HintResult, select_hint
+from agent.llm import LLMClient, OpenRouterClient
+from agent.loop import AgentResult, run_agent
 from agent.tools import ToolContext
 
 PLATFORM_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
-HINT_LEVEL = 1  # v0: always a level 1 nudge; levels 2-3 come later
 MAX_INPUT_CHARS = 6000
 
 log = logging.getLogger("codementor")
@@ -46,7 +51,8 @@ def build_user_message(ticket: int, ticket_text: str, test_output: str, log_text
     log_lines = log_text.splitlines()
     error_lines = [line for line in log_lines if "ERROR" in line or "Exception" in line]
     return "\n\n".join([
-        f"The tests for ticket {ticket} failed. Find the cause and write a level 1 hint.",
+        f"The tests for ticket {ticket} failed. Find the cause, then call submit_answer "
+        "with your diagnosis and the three hints.",
         f"<ticket>\n{tail(ticket_text)}\n</ticket>",
         f"<test_output>\n{tail(test_output)}\n</test_output>",
         f"<service_log_errors>\n{tail(chr(10).join(error_lines[-40:]) or '(no ERROR lines)', 3000)}\n</service_log_errors>",
@@ -55,13 +61,17 @@ def build_user_message(ticket: int, ticket_text: str, test_output: str, log_text
     ])
 
 
+def in_github_actions() -> bool:
+    return os.environ.get("GITHUB_ACTIONS") == "true"
+
+
 def report_error(message: str) -> None:
     """Log an error; in GitHub Actions also show it as a public annotation.
 
     Messages never contain the API key: config errors list variable names only.
     """
     log.error("%s", message)
-    if os.environ.get("GITHUB_ACTIONS") == "true":
+    if in_github_actions():
         print(f"::error title=CodeMentor agent::{message}", flush=True)
 
 
@@ -76,20 +86,38 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--tickets-dir", type=Path, default=PLATFORM_ROOT / "tickets")
     parser.add_argument("--base-url", default=os.environ.get("CODEMENTOR_BASE_URL", "http://localhost:8080"))
     parser.add_argument("--run-url", help="link to the workflow run for the comment footer")
-    parser.add_argument("--trace", type=Path, help="optional JSON file with the tool calls")
+    parser.add_argument("--level", type=int, choices=[1, 2, 3], default=1, help="hint level to publish")
+    parser.add_argument("--trace", type=Path, help="optional JSON file: tool calls, requests, check results")
+    parser.add_argument(
+        "--full-answer-out", type=Path, help="local eval runs only: save the whole answer (refused in CI)"
+    )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
-    args = parse_args(argv if argv is not None else sys.argv[1:])
-    load_dotenv(PLATFORM_ROOT / ".env")
-    try:
-        settings = load_settings()
-    except ConfigError as error:
-        report_error(str(error))
+def write_trace(path: Path, level: int, result: AgentResult, hint: HintResult | None) -> None:
+    """Only facts about the run, never the answer (D18)."""
+    trace = {
+        "level": level,
+        "requests": result.requests + (hint.requests if hint else 0),
+        "hit_limit": result.hit_limit,
+        "error": result.error,
+        "hint_status": hint.status if hint else None,
+        "hint_check": hint.reasons if hint else [],
+        "tool_calls": [asdict(entry) for entry in result.trace],
+    }
+    path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
+
+
+def write_full_answer(path: Path, level: int, result: AgentResult, hint: HintResult) -> None:
+    full = {"answer": asdict(result.answer), "level": level, "published_hint": hint.text, "hint_status": hint.status}
+    path.write_text(json.dumps(full, indent=2), encoding="utf-8")
+
+
+def run(args: argparse.Namespace, llm: LLMClient) -> int:
+    """One agent run with a given model client. Returns the exit code."""
+    if args.full_answer_out and in_github_actions():
+        report_error("--full-answer-out is for local eval runs only and is refused in GitHub Actions")
         return 2
-    log.info("model: %s", settings.model)
 
     ctx = ToolContext(
         repo_root=args.repo,
@@ -104,23 +132,44 @@ def main(argv: list[str] | None = None) -> int:
         read_optional(args.log),
     )
     system_prompt = (PROMPTS_DIR / "debugging.md").read_text(encoding="utf-8")
+    regenerate_prompt = (PROMPTS_DIR / "regenerate_hint_1.md").read_text(encoding="utf-8")
 
     try:
-        result = run_agent(OpenRouterClient(settings.api_key, settings.model), ctx, system_prompt, user_message)
+        result = run_agent(llm, ctx, system_prompt, user_message)
     except Exception as error:  # API errors, rate limits: the workflow falls back
         report_error(f"agent failed: {type(error).__name__}: {error}")
         return 1
+    log.info("tool calls: %d, requests: %d, hit limit: %s", len(result.trace), result.requests, result.hit_limit)
 
-    log.info("tool calls: %d, hit limit: %s", len(result.trace), result.hit_limit)
-    if args.trace:
-        args.trace.write_text(json.dumps([asdict(entry) for entry in result.trace], indent=2), encoding="utf-8")
-    if not result.answer:
-        report_error("the model returned an empty answer")
+    if result.answer is None:
+        if args.trace:
+            write_trace(args.trace, args.level, result, None)
+        report_error(f"the model did not submit a valid answer ({result.error})")
         return 1
 
-    args.out.write_text(build_debugging_comment(args.ticket, HINT_LEVEL, result.answer, args.run_url), encoding="utf-8")
-    log.info("comment written to %s", args.out)
+    hint = select_hint(result.answer, args.level, llm, regenerate_prompt)
+    if args.trace:
+        write_trace(args.trace, args.level, result, hint)
+    if args.full_answer_out:
+        write_full_answer(args.full_answer_out, args.level, result, hint)
+
+    comment = build_debugging_comment(args.ticket, args.level, hint.text, args.run_url, general=hint.status == "fallback")
+    args.out.write_text(comment, encoding="utf-8")
+    log.info("level %d hint (%s) written to %s", args.level, hint.status, args.out)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
+    args = parse_args(argv if argv is not None else sys.argv[1:])
+    load_dotenv(PLATFORM_ROOT / ".env")
+    try:
+        settings = load_settings()
+    except ConfigError as error:
+        report_error(str(error))
+        return 2
+    log.info("model: %s", settings.model)
+    return run(args, OpenRouterClient(settings.api_key, settings.model))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from agent.comment import CODE_REMOVED_NOTE, build_debugging_comment, marker, remove_code_blocks
+from agent.comment import CODE_REMOVED_NOTE, GENERAL_HINT_NOTE, build_debugging_comment, marker, remove_code_blocks
 
 
 def test_comment_starts_with_the_hidden_marker() -> None:
@@ -40,3 +40,17 @@ def test_model_cannot_fake_a_marker() -> None:
 
     assert fake not in comment
     assert comment.count("<!-- codementor:") == 1
+
+
+def test_comment_shows_the_level_it_was_built_for() -> None:
+    comment = build_debugging_comment(2, 3, "Hint.", None)
+
+    assert comment.splitlines()[0] == "<!-- codementor:ticket=2;mode=debugging;level=3 -->"
+    assert "(level 3)" in comment
+
+
+def test_general_hint_is_marked_as_such() -> None:
+    comment = build_debugging_comment(1, 1, "General hint.", None, general=True)
+
+    assert GENERAL_HINT_NOTE in comment
+    assert GENERAL_HINT_NOTE not in build_debugging_comment(1, 1, "Hint.", None)

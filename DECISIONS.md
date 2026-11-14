@@ -347,6 +347,11 @@ publishing them would make the hint levels pointless.
 to inspect real runs, but it leaks the answer. Encrypting the artifact: more
 moving parts and a key to manage, not worth it for the MVP.
 
+**Trace format (14 Nov 2026).** `agent-trace.json` is
+`{level, requests, hit_limit, error, hint_status, hint_check, tool_calls}`:
+`error` and `hint_check` are reason codes only, and `tool_calls` lists the
+investigation tools (never `submit_answer`).
+
 ## D19 — Identifier check catches only code-like tokens (12 Nov 2026)
 
 **What.** Code checks that `hint_1` contains no identifiers from the diagnosis.
