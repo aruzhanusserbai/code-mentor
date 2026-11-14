@@ -377,3 +377,19 @@ code: no spaces or slashes, and not a single word, acronym or number
 the original rule would have banned plain words again. Check results in logs
 and the trace are reason codes only (`leaks_identifiers`, `too_long`), never
 the identifiers, because they come from the diagnosis (D18).
+
+## D20 — One second chance per run (14 Nov 2026)
+
+**What.** The loop ends only with a valid `submit_answer` call, which does not
+count towards the 10 tool calls. After the limit only `submit_answer` is
+offered. The model gets one second chance per run, shared between a text
+answer, invalid `submit_answer` arguments and a tool call after the limit; the
+second miss ends the run without an answer and the workflow falls back (D14).
+
+**Why.** Free models sometimes answer with text or break the JSON; one retry
+fixes most of that, while a shared budget keeps the number of requests bounded
+(at most 12) on a free tier of about 50 requests per day.
+
+**Alternatives.** Accept a text answer as hint_1: no diagnosis and no levels
+2–3, and the checks of D19 could not run. Separate retries per kind of miss:
+more requests for little gain.
