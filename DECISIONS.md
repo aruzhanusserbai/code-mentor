@@ -404,3 +404,22 @@ fixes most of that, while a shared budget keeps the number of requests bounded
 **Alternatives.** Accept a text answer as hint_1: no diagnosis and no levels
 2–3, and the checks of D19 could not run. Separate retries per kind of miss:
 more requests for little gain.
+
+## D21 — If the PR comments cannot be read, the hint level is 1 (14 Nov 2026)
+
+**What.** The workflow step "Pick hint level" runs `gh api --paginate` on the
+PR comments and `python -m agent.levels`. If either fails (no permission, API
+error, unexpected output), the step prints a warning annotation, uses level 1
+and the run continues. The step itself never fails the job.
+
+**Why.** Errors should go towards less help, never more: a wrong level 1 only
+repeats a nudge, while a wrong level 3 would give a student the concept of the
+fix on the first attempt. Failing the whole run would take away the hint for a
+problem the student cannot fix (GitHub permissions). The same rule already
+covers empty output in `agent.levels` (no comments → level 1).
+
+**Alternatives.** Fail the job: the student gets no hint at all and only a CI
+error. Use the highest level: the opposite of what the levels are for.
+
+**Who decided.** I set the rule; Claude applied it to empty output first, and
+the workflow step follows the same principle.
