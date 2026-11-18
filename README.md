@@ -96,6 +96,7 @@ Open PRs in the test student repository, used to check the pipeline:
 | `ticket-0-product-by-id` | ticket 0 with the reference fix | green |
 | `fix-stuff` | branch that breaks the naming rule | red at the first step, no comment |
 | `ticket-1-agent-debug` | ticket 1 bug without a fix, for debugging the agent | red |
+| `ticket-2-order-total` (PR #5) | ticket 2 bug, then the reference fix: debugging, review, answers, label (eval/examples/real-run-12) | red, then green + `ticket-2-done` |
 
 ## Branch naming rule
 
