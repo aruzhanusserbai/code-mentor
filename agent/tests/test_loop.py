@@ -253,7 +253,7 @@ def test_finish_reason_and_tokens_are_logged_and_kept_without_text(
 
 
 def test_an_empty_reply_has_its_own_reason_and_gets_the_reminder(ctx: ToolContext) -> None:
-    empty = LLMReply(content="", finish_reason="length")
+    empty = LLMReply(content="", finish_reason="stop")
     llm = FakeLLM([empty, tool_reply(submit())])
 
     result = run_agent(llm, ctx, SYSTEM, USER)
@@ -266,12 +266,55 @@ def test_an_empty_reply_has_its_own_reason_and_gets_the_reminder(ctx: ToolContex
 
 
 def test_two_empty_replies_fail_with_empty_reply(ctx: ToolContext) -> None:
-    llm = FakeLLM([LLMReply(content=None, finish_reason="length"), LLMReply(content="  ", finish_reason="length")])
+    llm = FakeLLM([LLMReply(content=None, finish_reason="stop"), LLMReply(content="  ", finish_reason="stop")])
 
     result = run_agent(llm, ctx, SYSTEM, USER)
 
     assert result.answer is None
     assert result.error == "empty_reply"
+    assert result.requests == 2
+
+
+# --- empty replies cut by the token limit (D31) ------------------------------------
+
+
+def test_an_empty_reply_cut_by_the_limit_keeps_the_second_chance(ctx: ToolContext) -> None:
+    llm = FakeLLM([
+        LLMReply(content="", finish_reason="length"),  # extra retry
+        text_reply("Hint."),                           # uses the second chance
+        tool_reply(submit()),
+    ])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.answer == EXPECTED
+    assert result.length_retries == 1
+    assert result.requests == 3
+    assert llm.requests[1]["messages"][-1] == {"role": "user", "content": REMINDER_MESSAGE}
+
+
+def test_only_one_extra_retry_after_the_limit(ctx: ToolContext) -> None:
+    llm = FakeLLM([
+        LLMReply(content="", finish_reason="length"),  # extra retry
+        LLMReply(content="", finish_reason="length"),  # second chance
+        LLMReply(content="", finish_reason="length"),  # second miss: the run ends
+    ])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.answer is None
+    assert result.error == "empty_reply"
+    assert result.length_retries == 1
+    assert result.requests == 3
+
+
+def test_text_cut_by_the_limit_is_not_retried(ctx: ToolContext) -> None:
+    llm = FakeLLM([LLMReply(content="Partial hint", finish_reason="length"), text_reply("Hint.")])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.error == "text_instead_of_submit"
+    assert result.length_retries == 0
     assert result.requests == 2
 
 

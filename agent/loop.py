@@ -11,6 +11,11 @@ total: for a text answer, an empty reply (no text and no tool call, usually
 because the reply hit the token limit), invalid final tool arguments, or a
 tool call after the limit; the second miss ends the run without an answer.
 
+One exception: the first empty reply cut by the token limit
+(`finish_reason=length`, the model spent the limit on hidden reasoning) gets
+one extra request with the reminder and does not use the second chance
+(DECISIONS.md, D31). A second such reply is a normal `empty_reply` miss.
+
 The final tool arguments and any text the model writes are never logged or
 traced: in debugging mode they contain the diagnosis and all hint levels
 (DECISIONS.md, D18).
@@ -25,6 +30,7 @@ from agent.modes import DEBUGGING, Mode
 from agent.tools import ToolContext, execute_tool
 
 MAX_MISSES = 1  # one second chance per run
+MAX_LENGTH_RETRIES = 1  # extra request after an empty reply cut by the token limit (D31)
 # Debugging mode values, kept as names for the tests and the docs.
 MAX_TOOL_CALLS = DEBUGGING.max_tool_calls
 ALL_TOOLS = DEBUGGING.all_schemas()
@@ -76,6 +82,7 @@ class AgentResult:
     # memory only: main.py saves them to --full-answer-out (local runs, refused
     # in CI); never logged or traced (D18).
     rejected: list[str] = field(default_factory=list)
+    length_retries: int = 0  # extra requests after empty replies cut by the token limit
     # Plain text the model wrote instead of calling the final tool. Same rule
     # as `rejected`: memory and --full-answer-out only.
     text_replies: list[str] = field(default_factory=list)
@@ -169,6 +176,7 @@ def run_agent(
             result.answer = answer
             return result
 
+        miss = None
         if reply.tool_calls:
             messages.append(assistant_message(reply.content, reply.tool_calls))
             tool_messages, miss = run_tool_calls(reply, ctx, result, tools_allowed, mode)
@@ -177,7 +185,11 @@ def run_agent(
             # Nothing to show the model again: just remind it (D30).
             log.info("the model returned an empty reply (finish_reason=%s)", reply.finish_reason)
             messages.append({"role": "user", "content": mode.reminder})
-            miss = "empty_reply"
+            if reply.finish_reason == "length" and result.length_retries < MAX_LENGTH_RETRIES:
+                result.length_retries += 1
+                log.info("retrying once after the token limit, the second chance is kept")
+            else:
+                miss = "empty_reply"
         else:
             log.info("the model answered with text instead of %s", mode.submit_name)
             result.text_replies.append(reply.content or "")

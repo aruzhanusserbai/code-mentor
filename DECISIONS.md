@@ -675,3 +675,25 @@ chance. Next step to decide: a separate retry for `empty_reply` after
 **Alternatives.** Keep 1500 and only add `empty_reply`: the failure would be
 named correctly but happen as often. Raise the limit much more: slower and the
 model still may use all of it.
+
+## D31 — One extra request after an empty reply cut by the token limit (19 Nov 2026)
+
+**What.** If the model returns an empty reply with `finish_reason=length`
+(D30), the loop sends the reminder and asks once more **without** using the
+second chance of D20. Only once per run (`MAX_LENGTH_RETRIES = 1`); a second
+such reply, an empty reply with another finish reason, and text cut by the
+limit are normal misses. The worst case grows by one request: at most 13 in
+the loop (14 in debugging mode with the hint regeneration), at most 8 per
+answer round instead of 7 (D29).
+
+**Why.** An empty reply cut by the limit is not a wrong answer: the model ran
+out of tokens while reasoning. In the D30 check run the reminder request
+answered at once with 0 reasoning tokens. Without this, one such reply plus
+any other miss ended the run with the fallback comment, as in CI.
+
+**Alternatives.** Limit reasoning through OpenRouter's `reasoning` parameter:
+it depends on the model, and we do not know if this free model respects it;
+postponed to the eval, where it can be measured instead of guessed. Retry
+every empty reply: an empty reply that is not cut by the limit is a different
+problem, so it stays a miss. Raise the token limit again: D30 shows the model
+can use any limit.

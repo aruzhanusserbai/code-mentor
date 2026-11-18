@@ -73,13 +73,13 @@ you. I must be able to explain every line, so keep code simple and readable.
   repositories"). Read runs and comments through the public GitHub API; `gh` is not installed.
 - Agent deps: `.venv/Scripts/python -m pip install -r agent/requirements.txt`
 - Agent tests (fake LLM, no network): `pytest agent/tests -v`
-- Agent, one real run (uses 1–13 model requests: up to 12 in the loop (D20) + 1 regeneration; free tier ≈ 50/day, save them):
+- Agent, one real run (uses 1–14 model requests: up to 13 in the loop (D20, D31) + 1 regeneration; free tier ≈ 50/day, save them):
   `python -m agent.main --ticket 1 --repo template --test-output <file> --log <service.log> --out comment.md --level 1`
   (reads `.env`; needs the service running for `run_test`; add `--full-answer-out <file>` locally to see
   the diagnosis and all hints, refused in CI)
-- Agent, review mode (tests passed; 1–12 model requests, no service needed):
+- Agent, review mode (tests passed; 1–13 model requests, no service needed):
   `python -m agent.main --mode review --ticket 2 --repo <student repo> --diff <git diff base...head> --head-sha <sha> --out comment.md`
-- Agent, answer mode (PR author replied to a review; 1–7 model requests):
+- Agent, answer mode (PR author replied to a review; 1–8 model requests):
   `python -m agent.main --mode answer --ticket 2 --repo <student repo> --diff <diff> --comments <gh api output> --author <login> --out comment.md --verdict-out verdict.txt`
 - Should answer mode run, and which attempt: `python -m agent.threads --comments <gh api output> --author <login>`
 - Next hint level from PR comments: `python -m agent.levels --ticket 1 --comments <gh api --paginate output>`
