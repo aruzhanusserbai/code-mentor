@@ -32,6 +32,36 @@ def remove_html_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL).strip()
 
 
+def review_marker(ticket: int, sha: str) -> str:
+    """The head commit is in the marker: answers count only for the code that was reviewed (D29)."""
+    return f"<!-- codementor:ticket={ticket};mode=review;sha={sha} -->"
+
+
+def clean_question(question: str) -> str:
+    question, _ = remove_code_blocks(remove_html_comments(question))
+    return " ".join(question.split())
+
+
+def build_review_comment(ticket: int, sha: str, questions: tuple[str, ...], run_url: str | None) -> str:
+    lines = [
+        review_marker(ticket, sha),
+        f"### CodeMentor: ticket {ticket} tests passed",
+        "",
+        f"All ticket {ticket} tests passed. Before the ticket is closed, "
+        "please answer two questions about your fix:",
+        "",
+    ]
+    lines += [f"{number}. {clean_question(question)}" for number, question in enumerate(questions, start=1)]
+    lines += [
+        "",
+        "Reply in a comment on this pull request, in your own words. "
+        f"When the answers show that you understand the fix, the PR gets the label `ticket-{ticket}-done`.",
+    ]
+    if run_url:
+        lines += ["", f"Full test output: [workflow run]({run_url})."]
+    return "\n".join(lines) + "\n"
+
+
 def build_debugging_comment(ticket: int, level: int, hint: str, run_url: str | None, general: bool = False) -> str:
     """`general` marks the fallback hint used when the hint failed the checks (hints.py)."""
     hint, _ = remove_code_blocks(remove_html_comments(hint))

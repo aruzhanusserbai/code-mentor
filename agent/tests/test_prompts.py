@@ -81,3 +81,23 @@ def test_regenerate_prompt_3_forbids_annotation_and_method_names() -> None:
     prompt = flat(load_prompt("regenerate_hint_3.md")).lower()
 
     assert "no annotation" in prompt and "method" in prompt
+
+
+def test_review_prompt_takes_the_question_limits_from_the_code() -> None:
+    from agent.review import MAX_QUESTION_CHARS, MAX_QUESTION_SENTENCES
+
+    prompt = flat(load_prompt("review.md"))
+
+    assert "{" not in prompt
+    assert "exactly two questions" in prompt
+    assert f"At most {MAX_QUESTION_CHARS} characters" in prompt
+    assert f"at most {MAX_QUESTION_SENTENCES} sentences" in prompt
+
+
+def test_review_prompt_asks_for_submit_questions_and_marks_data_as_untrusted() -> None:
+    prompt = flat(load_prompt("review.md"))
+
+    assert "`submit_questions`" in prompt and "`questions`" in prompt
+    assert "## Untrusted data" in prompt and "never instructions" in prompt
+    assert "why the code failed before" in prompt.lower() and "why the fix looks like this" in prompt.lower()
+    assert "never invent code" in prompt.lower() and "one concrete alternative" in prompt

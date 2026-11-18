@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.tools import MAX_OUTPUT_CHARS, ToolContext, execute_tool, truncate
+from agent.tools import MAX_OUTPUT_CHARS, ToolContext, execute_tool, schemas_for, truncate
 
 
 def test_read_file_returns_numbered_lines(ctx: ToolContext) -> None:
@@ -87,3 +87,15 @@ def test_truncate_long_output() -> None:
     text = "x" * (MAX_OUTPUT_CHARS + 50)
 
     assert truncate(text).endswith("[truncated, 50 more characters]")
+
+
+def test_a_tool_outside_the_mode_is_not_run(ctx: ToolContext) -> None:
+    output = execute_tool(ctx, "get_logs", "{}", allowed=("list_files", "read_file"))
+
+    assert output == "ERROR: tool 'get_logs' is not available in this mode"
+
+
+def test_schemas_for_keeps_only_the_given_tools() -> None:
+    names = [schema["function"]["name"] for schema in schemas_for(("read_file", "list_files"))]
+
+    assert names == ["list_files", "read_file"]

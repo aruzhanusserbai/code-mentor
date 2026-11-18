@@ -533,3 +533,55 @@ ticket 1, so a search finds it without reasoning; kept as a candidate seeded
 bug for the eval.
 
 **Who decided.** Claude proposed three options with a recommendation; I chose A.
+
+## D26 — Review mode asks about the student's diff, with its own final tool (18 Nov 2026)
+
+**What.** When the ticket tests pass, the workflow runs the agent with
+`--mode review`. The agent gets the ticket and the student's change as a git
+diff (untrusted data in tags), may read files with `list_files` / `read_file`
+(10 calls, no logs, no test runs), and ends with `submit_questions`: exactly
+two questions, (1) why the code failed before the fix and (2) why the fix looks
+like this compared with one concrete alternative. Each question is at most two
+sentences, the last ending with "?", at most 400 characters, checked by code. An invalid call uses the loop's one second chance (D20). The modes
+live in `agent/modes.py` (prompt, tools, final tool, limit); the loop takes a
+mode, and `execute_tool` refuses a tool of another mode even when the model
+calls it by name. Empty diff → no model request, the workflow posts the plain
+result.
+
+**Why.** PLAN.md asks for questions about the student's own fix, not general
+theory; the diff is the cheapest way to show the model exactly what changed,
+without a tool that runs git. One loop for all modes keeps the limits and the
+"never log the answer" rule (D18) in one place.
+
+**Alternatives.** A `git_diff` tool: one more tool that runs a process.
+Reusing `submit_answer` with hint fields for questions: confusing names and
+checks that do not fit. A separate loop for review: duplicated limit logic.
+
+**Where I was wrong: the first prompt (runs 05–08).** I started with 2–3
+questions, one sentence, 300 characters. Run 05: 1 of 3 useful, two about
+made-up code. Run 06 (stricter content rules: only existing code, compare with
+an alternative): both submits rejected, the rules did not fit into one sentence
+of 300 characters; the rejected text was not visible, so the cause was a guess.
+After that, rejected `submit_questions` calls are saved in `--full-answer-out`
+(local only, refused in CI). Run 07 (400 characters, two sentences): format ok,
+2 of 3 useful, the third again about made-up code. Run 08 (exactly two
+questions with fixed roles, and only diff lines count as the student's
+decisions): both useful. The third question was filler, so it was removed
+instead of adding more rules. One run per version on one bug, so this is a
+direction, not a measured rate; the eval measures it.
+
+## D27 — The review marker carries the reviewed commit (18 Nov 2026)
+
+**What.** The review comment starts with
+`<!-- codementor:ticket=N;mode=review;sha=<head sha> -->`. `--head-sha` must be
+a lowercase hex hash (7–40 characters), so nothing else can get into the
+marker. Answer mode will accept answers only while the PR head is still this
+commit.
+
+**Why.** Without it, a student could push broken code after the review and
+answer the old questions before the new check finishes; the `done` label would
+then land on red code.
+
+**Alternatives.** Only "the latest bot comment is a review": does not cover
+the race between a push and the end of the new check. Asking the GitHub API
+for the check status in answer mode: more API calls and permissions.

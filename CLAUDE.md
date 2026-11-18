@@ -77,6 +77,8 @@ you. I must be able to explain every line, so keep code simple and readable.
   `python -m agent.main --ticket 1 --repo template --test-output <file> --log <service.log> --out comment.md --level 1`
   (reads `.env`; needs the service running for `run_test`; add `--full-answer-out <file>` locally to see
   the diagnosis and all hints, refused in CI)
+- Agent, review mode (tests passed; 1–12 model requests, no service needed):
+  `python -m agent.main --mode review --ticket 2 --repo <student repo> --diff <git diff base...head> --head-sha <sha> --out comment.md`
 - Next hint level from PR comments: `python -m agent.levels --ticket 1 --comments <gh api --paginate output>`
 - Eval: `python eval/run_eval.py --model <model>`
 

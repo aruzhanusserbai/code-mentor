@@ -88,6 +88,7 @@ def test_trace_records_the_run_without_the_answer(make_args, tmp_path: Path) -> 
 
     trace = json.loads((tmp_path / "trace.json").read_text(encoding="utf-8"))
     assert trace == {
+        "mode": "debugging",
         "level": 1,
         "requests": 3,  # two in the loop and one regeneration
         "hit_limit": False,

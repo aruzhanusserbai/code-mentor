@@ -1,4 +1,4 @@
-"""Read-only tools the mentor agent can call in debugging mode.
+"""Read-only tools the mentor agent can call. Each mode allows a subset (modes.py).
 
 Every tool returns plain text. Errors are returned as text starting with
 "ERROR:" so the model can react to them; they never stop the agent.
@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -178,11 +179,22 @@ TOOL_SCHEMAS = [
 ]
 
 
-def execute_tool(ctx: ToolContext, name: str, arguments_json: str) -> str:
-    """Run one tool call from the model. Always returns text, never raises."""
+def schemas_for(names: Collection[str]) -> list[dict]:
+    """The schemas of the given tools, in the order of TOOL_SCHEMAS."""
+    return [schema for schema in TOOL_SCHEMAS if schema["function"]["name"] in names]
+
+
+def execute_tool(ctx: ToolContext, name: str, arguments_json: str, allowed: Collection[str] | None = None) -> str:
+    """Run one tool call from the model. Always returns text, never raises.
+
+    `allowed` are the tools of the current mode: the model may call a tool by
+    name even if it was not offered, and that must not run.
+    """
     function = TOOL_FUNCTIONS.get(name)
     if function is None:
         return f"ERROR: unknown tool '{name}'"
+    if allowed is not None and name not in allowed:
+        return f"ERROR: tool '{name}' is not available in this mode"
     try:
         arguments = json.loads(arguments_json or "{}")
         if not isinstance(arguments, dict):
