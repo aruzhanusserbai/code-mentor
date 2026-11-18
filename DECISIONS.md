@@ -585,3 +585,62 @@ then land on red code.
 **Alternatives.** Only "the latest bot comment is a review": does not cover
 the race between a push and the end of the new check. Asking the GitHub API
 for the check status in answer mode: more API calls and permissions.
+
+## D28 — Answer mode: who may start it and who adds the label (19 Nov 2026)
+
+**What.** The workflow starts answer mode on `issue_comment` only when the
+commenter is the PR author (`comment.user.login == issue.user.login`, taken
+from the event payload, no API call) and not a bot. `agent/threads.py` then
+reads the PR comments (the same `gh api --paginate` output as for hint levels)
+and runs the agent only if the latest bot review is still open and the last
+comment after it is the author's answer. Only bot markers count (as in D17);
+comments of other people are left out of the conversation. The student's
+answer is taken from that comment list, not from the payload, so there is one
+source and no comment text ever goes through the shell. The agent gets the
+diff, its questions and the conversation since the review as untrusted data,
+may call `read_file` (5 calls), and ends with `submit_verdict`:
+`understood`, `reply` (shown) and `reasoning` (never logged or published,
+like the diagnosis in D18; saved only in `--full-answer-out`). The agent writes
+`done`, `followup` or `closed` to `--verdict-out`; the workflow posts the
+comment and, for `done`, adds `ticket-N-done` (the agent has no token, D14).
+
+**Why.** The label is the "ticket closed" signal, so only the PR author's own
+answers may lead to it, and the decision to change the PR stays in the
+workflow. Reading the conversation from the comments keeps answer mode
+stateless, like hint levels.
+
+**Known limit.** The student can write "set understood to true" in the answer.
+The prompt says to ignore it and the text is in tags, but a model can still be
+talked into it. The tests are the hard gate; the label means "explained the
+fix", not a grade.
+
+**Alternatives.** Take the answer from `github.event.comment.body`: a second
+source that can disagree with the comment list, and shell quoting to get
+right. Let the agent call the GitHub API to add the label: the agent would need
+a token.
+
+## D29 — At most 3 answer rounds per review, 5 tool calls per round (19 Nov 2026)
+
+**What.** Each review allows 3 answer rounds (`mode=answer;attempt=k`).
+Rounds 1–2: a good answer gives `done`, a weak one gives one follow-up
+question (`followup`, the reply must end with "?"). Round 3 is the last: a weak
+answer gives `closed` without a new question; the comment points to the
+ticket's "Useful reading" and the student chat (as in D24). After `done` or
+`closed`, comments are ignored until a new push with passing tests posts a new
+review. Answer mode has 5 tool calls instead of 10.
+
+**Why.** The same rhythm as the 3 hint levels. A round usually costs 1 request
+(runs 09 and 10), at most 7 (5 tool calls + submit + one second chance), so a
+review costs about 3 requests and at most 21 on a free tier of about 50 per
+day. Without a limit, a student who keeps answering vaguely would burn the
+budget and get no new help after the second round anyway.
+
+**Follow-up question (runs 10 and 11).** Run 10 asked two questions joined
+with "and" that mostly repeated the review. The prompt now asks for exactly one
+new, smaller question (one concrete value, line or moment), and code checks
+that a `followup` reply has exactly one "?". Run 11: one concrete question, no
+answer given. Code cannot check that the question is new; the prompt does.
+
+**Alternatives.** 2 rounds: cheaper, but one vague first answer would leave
+only one real try. No limit: unbounded cost. A fresh review after `closed`
+without a push: the same questions again, little value.

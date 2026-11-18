@@ -142,3 +142,14 @@ def test_regeneration_uses_the_prompt_of_the_selected_level(make_args) -> None:
 
     assert code == 0
     assert llm.requests[1]["messages"][0]["content"] == "regenerate prompt 2"
+
+
+@pytest.mark.parametrize("module", ["main.py", "levels.py", "threads.py"])
+def test_the_main_guard_is_the_last_statement(module: str) -> None:
+    # Functions defined after the guard do not exist yet when the module runs
+    # with `python -m` (this happened once with run_answer).
+    import ast
+
+    tree = ast.parse((Path(main_module.__file__).parent / module).read_text(encoding="utf-8"))
+    last = tree.body[-1]
+    assert isinstance(last, ast.If) and "__main__" in ast.unparse(last.test)

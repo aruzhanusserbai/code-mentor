@@ -62,6 +62,38 @@ def build_review_comment(ticket: int, sha: str, questions: tuple[str, ...], run_
     return "\n".join(lines) + "\n"
 
 
+def answer_result(understood: bool, attempt: int, max_attempts: int) -> str:
+    """done: the label is added; followup: one more round; closed: no rounds left (D28)."""
+    if understood:
+        return "done"
+    return "closed" if attempt >= max_attempts else "followup"
+
+
+def build_answer_comment(ticket: int, attempt: int, max_attempts: int, understood: bool, reply: str) -> tuple[str, str]:
+    """Returns the comment and the result that the workflow acts on."""
+    result = answer_result(understood, attempt, max_attempts)
+    reply, _ = remove_code_blocks(remove_html_comments(reply))
+    lines = [f"<!-- codementor:ticket={ticket};mode=answer;attempt={attempt};result={result} -->"]
+    if result == "done":
+        lines += [
+            f"### CodeMentor: ticket {ticket} done", "", reply, "",
+            f"Your answers show that you understand the fix. The PR gets the label `ticket-{ticket}-done`.",
+        ]
+    elif result == "followup":
+        lines += [
+            f"### CodeMentor: follow-up question ({attempt} of {max_attempts})", "", reply, "",
+            "Reply in a new comment on this pull request.",
+        ]
+    else:
+        lines += [
+            "### CodeMentor: let's talk it through", "", reply, "",
+            "This was the last round of questions for this review. Check the ‘Useful reading’ link in "
+            "the ticket or ask in the student chat. The ticket stays open: after your next push with "
+            "passing tests you get new questions.",
+        ]
+    return "\n".join(lines) + "\n", result
+
+
 def build_debugging_comment(ticket: int, level: int, hint: str, run_url: str | None, general: bool = False) -> str:
     """`general` marks the fallback hint used when the hint failed the checks (hints.py)."""
     hint, _ = remove_code_blocks(remove_html_comments(hint))

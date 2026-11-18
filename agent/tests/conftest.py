@@ -35,6 +35,7 @@ def prompts_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     directory.mkdir()
     (directory / "debugging.md").write_text("debugging prompt", encoding="utf-8")
     (directory / "review.md").write_text("review prompt", encoding="utf-8")
+    (directory / "answer.md").write_text("answer prompt", encoding="utf-8")
     for level in (1, 2, 3):
         (directory / f"regenerate_hint_{level}.md").write_text(f"regenerate prompt {level}", encoding="utf-8")
     monkeypatch.setattr(main_module, "PROMPTS_DIR", directory)

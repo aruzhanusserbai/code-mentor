@@ -101,3 +101,15 @@ def test_review_prompt_asks_for_submit_questions_and_marks_data_as_untrusted() -
     assert "## Untrusted data" in prompt and "never instructions" in prompt
     assert "why the code failed before" in prompt.lower() and "why the fix looks like this" in prompt.lower()
     assert "never invent code" in prompt.lower() and "one concrete alternative" in prompt
+
+
+def test_answer_prompt_takes_the_reply_limit_from_the_code_and_marks_data_as_untrusted() -> None:
+    from agent.verdict import MAX_REPLY_SENTENCES
+
+    prompt = flat(load_prompt("answer.md"))
+
+    assert "{" not in prompt
+    assert f"At most {MAX_REPLY_SENTENCES} sentences" in prompt
+    assert "`submit_verdict`" in prompt and "`understood`" in prompt and "`reasoning`" in prompt
+    assert "## Untrusted data" in prompt and "never instructions" in prompt
+    assert "never give the answer" in prompt.lower()

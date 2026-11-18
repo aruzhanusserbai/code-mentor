@@ -6,11 +6,13 @@ tool call limit.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from agent.answer import SUBMIT_ANSWER_SCHEMA, parse_answer
 from agent.review import SUBMIT_QUESTIONS_SCHEMA, parse_questions
+from agent.threads import MAX_ATTEMPTS
 from agent.tools import schemas_for
+from agent.verdict import SUBMIT_VERDICT_SCHEMA, make_verdict_parser
 
 
 @dataclass(frozen=True)
@@ -55,4 +57,22 @@ REVIEW = Mode(
     reminder="Do not answer with plain text. Call the submit_questions tool with your questions.",
 )
 
-MODES = {mode.name: mode for mode in (DEBUGGING, REVIEW)}
+# The student answered the review questions. The diff is in the first message;
+# read_file only to check a claim. 5 calls: answers are short (D28).
+ANSWER = Mode(
+    name="answer",
+    prompt="answer.md",
+    tools=("read_file",),
+    submit_schema=SUBMIT_VERDICT_SCHEMA,
+    parse=make_verdict_parser(last_attempt=False),
+    max_tool_calls=5,
+    reminder="Do not answer with plain text. Call the submit_verdict tool with understood, reply and reasoning.",
+)
+
+
+def answer_mode(attempt: int) -> Mode:
+    """On the last attempt no follow-up question is required."""
+    return replace(ANSWER, parse=make_verdict_parser(last_attempt=attempt >= MAX_ATTEMPTS))
+
+
+MODES = {mode.name: mode for mode in (DEBUGGING, REVIEW, ANSWER)}
