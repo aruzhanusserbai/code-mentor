@@ -7,8 +7,9 @@ never with solution code.
 
 Full plan: [PLAN.md](PLAN.md). Decisions log: [DECISIONS.md](DECISIONS.md).
 
-> Status: early development. Template service, tests for tickets 0–1 and the
-> PR check workflow work end to end; the mentor agent is not connected yet.
+> Status: in development. Template service, tests for tickets 0–2, the PR
+> check workflow and the mentor agent (debugging, review and answer modes) are
+> implemented; the eval is next.
 
 ## Repository layout
 
@@ -17,7 +18,7 @@ Full plan: [PLAN.md](PLAN.md). Decisions log: [DECISIONS.md](DECISIONS.md).
 | `template/` | Java/Spring orders service the student receives (with ticket bugs) |
 | `tickets/` | Student-facing ticket descriptions |
 | `tests/tickets/` | Protected black-box tests per ticket (pytest + requests, HTTP only) |
-| `agent/` | AI mentor agent (Python) — *in progress* |
+| `agent/` | AI mentor agent (Python): debugging, review and answer modes |
 | `eval/` | Seeded bugs, labels, reference fixes, eval runner, results |
 | `.github/workflows/` | Reusable workflow for student repositories — *in progress* |
 | `agent-logs/` | Key Claude Code sessions |
@@ -61,8 +62,18 @@ repository. On every push to a PR it:
 2. starts the student's service with `docker compose up -d --build`;
 3. runs the protected tests `tests/tickets/ticket_<N>` from this repository;
 4. uploads the test output and service logs as a workflow artifact;
-5. posts a PR comment with the result (placeholder until the mentor agent is
-   connected) and marks the check red if the tests did not pass.
+5. if the tests failed, runs the mentor agent in **debugging mode**: a hint of
+   level 1–3, never the solution;
+6. if the tests passed, runs the agent in **review mode**: two questions about
+   the student's own fix (why it failed before, why the fix looks like this);
+7. posts one PR comment (the plain result if the agent fails) and marks the
+   check red if the tests did not pass.
+
+When the PR author replies in the PR, the same workflow runs **answer mode**
+(job `answer`): the agent judges the answers, confirms or asks one follow-up
+question (at most 3 rounds per review), and for good answers the workflow adds
+the label `ticket-N-done`. The agent itself never gets a GitHub token: it
+writes the comment, the workflow posts it (DECISIONS.md, D14, D26–D29).
 
 ## Publishing the template repository
 

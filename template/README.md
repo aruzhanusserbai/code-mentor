@@ -41,9 +41,14 @@ The API is described in [CONTRACT.md](CONTRACT.md).
    `git checkout -b ticket-1-empty-cart`. Lowercase letters, digits and `-` only.
 3. Fix it, commit, push and open a pull request.
 4. Automated checks run the tests **for ticket N only** (taken from the branch
-   name), and the mentor bot comments with hints. A PR from a branch that does
-   not follow the naming rule is not checked: the check fails with a message
-   asking you to rename the branch.
+   name). If they fail, the mentor bot comments with a hint; each new failed
+   attempt gets a more specific one. A PR from a branch that does not follow
+   the naming rule is not checked: the check fails with a message asking you
+   to rename the branch.
+5. When the tests pass, the mentor asks two questions about your fix. Answer
+   them in a comment on the pull request, in your own words. Good answers
+   close the ticket with the label `ticket-N-done`; otherwise the mentor asks a
+   follow-up question (at most three rounds).
 
 ## Set up the mentor (once, after creating your repository)
 

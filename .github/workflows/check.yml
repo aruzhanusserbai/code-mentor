@@ -1,8 +1,17 @@
 # Reusable workflow called from student repositories (see
-# template/.github/workflows/codementor.yml). It starts the student's service,
-# runs the protected tests of the ticket taken from the branch name and posts
-# the result as a PR comment. If the tests failed, the mentor agent (debugging
-# mode) writes the comment instead; if the agent fails, the plain result is posted.
+# template/.github/workflows/codementor.yml). The workflow picks the agent mode
+# (PLAN.md, section 3):
+#
+# - job `check` (pull_request): starts the student's service, runs the protected
+#   tests of the ticket taken from the branch name and posts one PR comment.
+#   Tests failed -> the mentor agent in debugging mode writes a hint.
+#   Tests passed -> the agent in review mode asks two questions about the fix.
+#   If the agent fails, the plain result is posted.
+# - job `answer` (issue_comment by the PR author): the agent judges the answers
+#   to the review questions; for `done` this workflow adds `ticket-N-done`.
+#
+# The agent never gets a GitHub token: it writes comment.md (and verdict.txt),
+# and this workflow posts them (DECISIONS.md, D14, D28).
 
 name: CodeMentor check
 
@@ -20,7 +29,6 @@ on:
 
 jobs:
   check:
-    # PR comments (answer mode) are handled later; for now only PR events.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -49,6 +57,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: student
+          fetch-depth: 0  # the base branch is needed for the diff in review mode
 
       - name: Check out platform tests
         uses: actions/checkout@v4
@@ -142,11 +151,25 @@ jobs:
           echo "Hint level: $level"
           echo "value=$level" >> "$GITHUB_OUTPUT"
 
+      # Review mode needs the student's change. The checkout is the PR merge
+      # commit, so base...HEAD is exactly what the PR changes.
+      - name: Collect the student's change
+        if: steps.result.outputs.value == 'passed'
+        working-directory: student
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git diff "origin/${BASE_REF}...HEAD" > ../changes.diff
+
+      # Tests failed -> debugging; passed -> review, unless the ticket is already
+      # done (the label is in the event payload, no API call).
       # The agent only reads: it gets no GitHub token and writes comment.md,
       # which the next step posts (DECISIONS.md, D14).
-      - name: Run the mentor agent (debugging mode)
+      - name: Run the mentor agent
         id: agent
-        if: steps.result.outputs.value == 'failed'
+        if: >-
+          steps.result.outputs.value == 'failed'
+          || (steps.result.outputs.value == 'passed'
+              && !contains(github.event.pull_request.labels.*.name, format('ticket-{0}-done', steps.ticket.outputs.number)))
         continue-on-error: true
         working-directory: codementor
         env:
@@ -154,13 +177,21 @@ jobs:
           CODEMENTOR_MODEL: ${{ vars.CODEMENTOR_MODEL }}
           CODEMENTOR_BASE_URL: http://localhost:8080
           TICKET: ${{ steps.ticket.outputs.number }}
+          RESULT: ${{ steps.result.outputs.value }}
           LEVEL: ${{ steps.level.outputs.value || '1' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           pip install -r agent/requirements.txt
-          python -m agent.main --ticket "$TICKET" --level "$LEVEL" --repo ../student \
-            --test-output ../test-output.txt --log ../service.log \
-            --out ../comment.md --trace ../agent-trace.json --run-url "$RUN_URL"
+          if [ "$RESULT" = "failed" ]; then
+            python -m agent.main --ticket "$TICKET" --level "$LEVEL" --repo ../student \
+              --test-output ../test-output.txt --log ../service.log \
+              --out ../comment.md --trace ../agent-trace.json --run-url "$RUN_URL"
+          else
+            python -m agent.main --mode review --ticket "$TICKET" --repo ../student \
+              --diff ../changes.diff --head-sha "$HEAD_SHA" \
+              --out ../comment.md --trace ../agent-trace.json --run-url "$RUN_URL"
+          fi
 
       - name: Upload test output and logs
         if: always()
@@ -170,12 +201,13 @@ jobs:
           path: |
             test-output.txt
             service.log
+            changes.diff
             agent-trace.json
           if-no-files-found: ignore
 
-      # One new comment per run. The agent comment has mode=debugging; the plain
-      # result comment (tests passed, build failed, or the agent failed) has
-      # mode=check, so it never counts as a hint level.
+      # One new comment per run. The agent comment has mode=debugging or
+      # mode=review; the plain result comment (build failed, the agent failed or
+      # was skipped) has mode=check, so it never counts as a hint level or a review.
       - name: Comment on the pull request
         if: steps.result.outputs.value != ''
         env:
@@ -222,3 +254,123 @@ jobs:
         run: |
           echo "::error::Result: $RESULT"
           exit 1
+
+  # The PR author replied in the PR. Only the author's own comments start this
+  # job (payload fields, no API call); threads.py then checks that a review is
+  # open and that the last comment is the author's answer (D28, D29).
+  # The student's code is checked out but never built or run here.
+  answer:
+    if: >-
+      github.event_name == 'issue_comment'
+      && github.event.action == 'created'
+      && github.event.issue.pull_request
+      && github.event.comment.user.login == github.event.issue.user.login
+      && github.event.comment.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: codementor-${{ github.repository }}-answer-${{ github.event.issue.number }}
+      cancel-in-progress: false  # answer the comments one by one, in order
+
+    steps:
+      - name: Check out platform
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.platform_repo }}
+          ref: ${{ inputs.platform_ref }}
+          path: codementor
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read the review thread
+        id: thread
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" > pr-comments.json
+          (cd codementor && python -m agent.threads --comments ../pr-comments.json --author "$AUTHOR") \
+            | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check out the PR head
+        if: steps.thread.outputs.action == 'run'
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          path: student
+          fetch-depth: 0
+
+      # Answers count only for the reviewed commit (D27). After a new push the
+      # check job posts new questions, so here we just stop.
+      - name: Check that the review is for the current code
+        id: head
+        if: steps.thread.outputs.action == 'run'
+        working-directory: student
+        env:
+          REVIEW_SHA: ${{ steps.thread.outputs.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          head_sha=$(git rev-parse HEAD)
+          if [ "$head_sha" != "$REVIEW_SHA" ]; then
+            echo "::notice title=CodeMentor::New commits since the review, waiting for the new check."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "current=true" >> "$GITHUB_OUTPUT"
+          git diff "origin/${DEFAULT_BRANCH}...HEAD" > ../changes.diff
+
+      - name: Run the mentor agent (answer mode)
+        id: agent
+        if: steps.head.outputs.current == 'true'
+        continue-on-error: true
+        working-directory: codementor
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          CODEMENTOR_MODEL: ${{ vars.CODEMENTOR_MODEL }}
+          TICKET: ${{ steps.thread.outputs.ticket }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          pip install -r agent/requirements.txt
+          python -m agent.main --mode answer --ticket "$TICKET" --repo ../student \
+            --diff ../changes.diff --comments ../pr-comments.json --author "$AUTHOR" \
+            --out ../comment.md --verdict-out ../verdict.txt --trace ../agent-trace.json
+
+      - name: Upload the answer run
+        if: always() && steps.head.outputs.current == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codementor-answer
+          path: |
+            changes.diff
+            agent-trace.json
+          if-no-files-found: ignore
+
+      # The workflow, not the agent, posts the comment and adds the label.
+      # Adding a label through the issues API creates it if it does not exist.
+      - name: Comment and label
+        if: steps.head.outputs.current == 'true'
+        env:
+          AGENT_OUTCOME: ${{ steps.agent.outcome }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          TICKET: ${{ steps.thread.outputs.ticket }}
+        run: |
+          if [ "$AGENT_OUTCOME" = "success" ] && [ -s comment.md ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+            if [ "$(cat verdict.txt)" = "done" ]; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+                -f "labels[]=ticket-${TICKET}-done" > /dev/null
+            fi
+            exit 0
+          fi
+          {
+            echo "<!-- codementor:ticket=${TICKET};mode=check;result=answer_failed -->"
+            echo "### CodeMentor"
+            echo
+            echo "The mentor could not process your answer this time. Please post it again in a new comment a bit later."
+          } > comment.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
