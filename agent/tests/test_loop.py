@@ -229,3 +229,23 @@ def tool_reply_with_text(text: str, call: tuple[str, str]) -> LLMReply:
     reply = tool_reply(call)
     reply.content = text
     return reply
+
+
+
+def test_finish_reason_and_tokens_are_logged_and_kept_without_text(
+    ctx: ToolContext, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    empty = LLMReply(content="", finish_reason="length", completion_tokens=1500, reasoning_tokens=1490)
+    answer = tool_reply(submit())
+    answer.finish_reason, answer.completion_tokens, answer.reasoning_tokens = "tool_calls", 300, 120
+    llm = FakeLLM([empty, answer])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert [(i.finish_reason, i.completion_tokens, i.reasoning_tokens, i.tool_calls) for i in result.request_infos] == [
+        ("length", 1500, 1490, 0),
+        ("tool_calls", 300, 120, 1),
+    ]
+    assert "request 1: finish_reason=length, completion_tokens=1500, reasoning_tokens=1490, tool_calls=0" in caplog.text
+    assert "SECRET" not in caplog.text

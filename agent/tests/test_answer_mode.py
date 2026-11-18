@@ -290,3 +290,19 @@ def test_answer_prompt_asks_for_one_new_question() -> None:
     prompt = " ".join(load_prompt("answer.md").split()).lower()
 
     assert "exactly one" in prompt and "not the review question again" in prompt
+
+
+def test_text_replies_are_saved_locally_but_never_logged(
+    answer_args, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    full = tmp_path / "full.json"
+    llm = FakeLLM([text_reply("SECRET chat answer 1"), text_reply("SECRET chat answer 2")])
+
+    code = run(answer_args(write_comments(tmp_path / "c.json", "answer"), "--full-answer-out", str(full)), llm)
+
+    assert code == 1
+    saved = json.loads(full.read_text(encoding="utf-8"))
+    assert saved == {"verdict": None, "rejected": [], "text_replies": ["SECRET chat answer 1", "SECRET chat answer 2"]}
+    assert "SECRET" not in caplog.text
+    assert "SECRET" not in (tmp_path / "trace.json").read_text(encoding="utf-8")

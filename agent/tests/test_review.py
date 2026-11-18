@@ -317,7 +317,11 @@ def test_full_answer_has_rejected_questions_even_when_the_run_fails(make_args, d
 
     assert code == 1
     saved = json.loads(full.read_text(encoding="utf-8"))
-    assert saved == {"questions": None, "rejected": [{"questions": ["Not a question", "Why?"]}, "{broken"]}
+    assert saved == {
+        "questions": None,
+        "rejected": [{"questions": ["Not a question", "Why?"]}, "{broken"],
+        "text_replies": [],
+    }
     trace = json.loads((tmp_path / "trace.json").read_text(encoding="utf-8"))
     assert "Not a question" not in json.dumps(trace)
 
@@ -328,7 +332,7 @@ def test_full_answer_has_the_accepted_questions(make_args, diff_file: Path, tmp_
 
     run(review_args(make_args, diff_file, "--full-answer-out", str(full)), llm)
 
-    assert json.loads(full.read_text(encoding="utf-8")) == {"questions": QUESTIONS, "rejected": []}
+    assert json.loads(full.read_text(encoding="utf-8")) == {"questions": QUESTIONS, "rejected": [], "text_replies": []}
 
 
 def test_full_answer_is_refused_in_ci_for_reviews(make_args, diff_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

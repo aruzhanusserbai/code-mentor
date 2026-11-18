@@ -20,6 +20,15 @@ class ToolCall:
 class LLMReply:
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # Facts about the request, never the text: safe to log and trace (D18).
+    finish_reason: str | None = None  # "stop", "tool_calls", "length", ...
+    completion_tokens: int | None = None
+    reasoning_tokens: int | None = None  # hidden reasoning, part of completion_tokens
+
+
+def reasoning_tokens_of(usage: object) -> int | None:
+    details = getattr(usage, "completion_tokens_details", None)
+    return getattr(details, "reasoning_tokens", None) if details else None
 
 
 class LLMClient(Protocol):
@@ -36,9 +45,17 @@ class OpenRouterClient:
         response = self._client.chat.completions.create(
             model=self._model, messages=messages, max_tokens=MAX_ANSWER_TOKENS, **options
         )
-        message = response.choices[0].message
+        choice = response.choices[0]
+        message = choice.message
         calls = [
             ToolCall(id=call.id, name=call.function.name, arguments=call.function.arguments)
             for call in (message.tool_calls or [])
         ]
-        return LLMReply(content=message.content, tool_calls=calls)
+        usage = response.usage
+        return LLMReply(
+            content=message.content,
+            tool_calls=calls,
+            finish_reason=choice.finish_reason,
+            completion_tokens=getattr(usage, "completion_tokens", None),
+            reasoning_tokens=reasoning_tokens_of(usage),
+        )

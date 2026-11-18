@@ -96,6 +96,10 @@ def test_trace_records_the_run_without_the_answer(make_args, tmp_path: Path) -> 
         "hint_status": "regenerated",
         "hint_check": ["leaks_identifiers"],
         "tool_calls": [{"tool": "get_logs", "arguments": "{}", "result_chars": trace["tool_calls"][0]["result_chars"]}],
+        "llm_requests": [  # the loop requests only; the FakeLLM reports no finish reason or tokens
+            {"finish_reason": None, "completion_tokens": None, "reasoning_tokens": None, "tool_calls": 1},
+            {"finish_reason": None, "completion_tokens": None, "reasoning_tokens": None, "tool_calls": 1},
+        ],
     }
 
 

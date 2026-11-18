@@ -55,9 +55,19 @@ class TraceEntry:
 
 
 @dataclass
+class RequestInfo:
+    """One model request: how it ended and how many tokens it used. No text (D18)."""
+    finish_reason: str | None
+    completion_tokens: int | None
+    reasoning_tokens: int | None
+    tool_calls: int
+
+
+@dataclass
 class AgentResult:
     answer: object | None = None  # what mode.parse returns: Answer, ReviewQuestions, ...
     trace: list[TraceEntry] = field(default_factory=list)
+    request_infos: list[RequestInfo] = field(default_factory=list)
     hit_limit: bool = False
     requests: int = 0
     error: str | None = None  # why there is no answer: the reason of the last miss
@@ -65,6 +75,9 @@ class AgentResult:
     # memory only: main.py saves them to --full-answer-out (local runs, refused
     # in CI); never logged or traced (D18).
     rejected: list[str] = field(default_factory=list)
+    # Plain text the model wrote instead of calling the final tool. Same rule
+    # as `rejected`: memory and --full-answer-out only.
+    text_replies: list[str] = field(default_factory=list)
 
 
 def assistant_message(content: str | None, tool_calls: list[ToolCall]) -> dict:
@@ -142,6 +155,12 @@ def run_agent(
 
         reply = llm.chat(messages, mode.all_schemas() if tools_allowed else [mode.submit_schema])
         result.requests += 1
+        info = RequestInfo(reply.finish_reason, reply.completion_tokens, reply.reasoning_tokens, len(reply.tool_calls))
+        result.request_infos.append(info)
+        log.info(
+            "request %d: finish_reason=%s, completion_tokens=%s, reasoning_tokens=%s, tool_calls=%d",
+            result.requests, info.finish_reason, info.completion_tokens, info.reasoning_tokens, info.tool_calls,
+        )
 
         answer = find_answer(reply, mode)
         if answer is not None:
@@ -155,6 +174,7 @@ def run_agent(
             messages.extend(tool_messages)
         else:
             log.info("the model answered with text instead of %s", mode.submit_name)
+            result.text_replies.append(reply.content or "")
             messages.append({"role": "assistant", "content": reply.content or ""})
             messages.append({"role": "user", "content": mode.reminder})
             miss = "text_instead_of_submit"

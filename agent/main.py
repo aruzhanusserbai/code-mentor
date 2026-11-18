@@ -207,6 +207,7 @@ def write_trace(path: Path, mode: str, level: int | None, result: AgentResult, h
         "hint_status": hint.status if hint else None,
         "hint_check": hint.reasons if hint else [],
         "tool_calls": [asdict(entry) for entry in result.trace],
+        "llm_requests": [asdict(info) for info in result.request_infos],
     }
     path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
 
@@ -282,6 +283,7 @@ def write_review_full_answer(path: Path, result: AgentResult) -> None:
     full = {
         "questions": list(result.answer.questions) if result.answer else None,
         "rejected": [as_json(arguments) for arguments in result.rejected],
+        "text_replies": result.text_replies,
     }
     path.write_text(json.dumps(full, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -338,6 +340,7 @@ def write_answer_full_answer(path: Path, result: AgentResult) -> None:
     full = {
         "verdict": asdict(result.answer) if result.answer else None,
         "rejected": [as_json(arguments) for arguments in result.rejected],
+        "text_replies": result.text_replies,
     }
     path.write_text(json.dumps(full, indent=2, ensure_ascii=False), encoding="utf-8")
 
