@@ -249,3 +249,42 @@ def test_finish_reason_and_tokens_are_logged_and_kept_without_text(
     ]
     assert "request 1: finish_reason=length, completion_tokens=1500, reasoning_tokens=1490, tool_calls=0" in caplog.text
     assert "SECRET" not in caplog.text
+
+
+
+def test_an_empty_reply_has_its_own_reason_and_gets_the_reminder(ctx: ToolContext) -> None:
+    empty = LLMReply(content="", finish_reason="length")
+    llm = FakeLLM([empty, tool_reply(submit())])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.answer == EXPECTED
+    assert result.text_replies == []
+    messages = llm.requests[1]["messages"]
+    assert messages[-1] == {"role": "user", "content": REMINDER_MESSAGE}
+    assert messages[-2]["role"] != "assistant"  # no empty assistant message is sent back
+
+
+def test_two_empty_replies_fail_with_empty_reply(ctx: ToolContext) -> None:
+    llm = FakeLLM([LLMReply(content=None, finish_reason="length"), LLMReply(content="  ", finish_reason="length")])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.answer is None
+    assert result.error == "empty_reply"
+    assert result.requests == 2
+
+
+def test_an_empty_reply_uses_the_shared_second_chance(ctx: ToolContext) -> None:
+    llm = FakeLLM([LLMReply(content=""), text_reply("Hint.")])
+
+    result = run_agent(llm, ctx, SYSTEM, USER)
+
+    assert result.error == "text_instead_of_submit"
+    assert result.requests == 2
+
+
+def test_the_answer_token_limit_leaves_room_for_reasoning() -> None:
+    from agent.llm import MAX_ANSWER_TOKENS
+
+    assert MAX_ANSWER_TOKENS >= 4000  # 1500 was used up by hidden reasoning in CI (D30)

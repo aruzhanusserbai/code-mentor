@@ -644,3 +644,34 @@ answer given. Code cannot check that the question is new; the prompt does.
 **Alternatives.** 2 rounds: cheaper, but one vague first answer would leave
 only one real try. No limit: unbounded cost. A fresh review after `closed`
 without a push: the same questions again, little value.
+
+## D30 — Empty replies: the free model spends the token limit on hidden reasoning (19 Nov 2026)
+
+**What happened.** In CI (PR #5 of the test student repository, run
+44397603005) answer mode posted the `answer_failed` fallback after a good
+answer. The public annotation said `text_instead_of_submit`; the trace had 3
+requests and 1 `read_file`. I first guessed that the model "answered like in a
+chat". To check, plain-text replies are now saved in `--full-answer-out` and
+every request logs `finish_reason` and token counts (no text, D18). A local
+run on the same input showed the real cause: the "text" was an **empty
+reply**, `finish_reason=length`, `reasoning_tokens=1500` of
+`MAX_ANSWER_TOKENS=1500`. The model spent the whole limit on hidden reasoning
+and never got to the tool call, twice in a row. My guess was wrong; the
+logging found it.
+
+**What.** `MAX_ANSWER_TOKENS` is 4000. An empty reply (no text, no tool call)
+has its own miss reason `empty_reply` instead of `text_instead_of_submit`; it
+still uses the shared second chance (D20), and no empty assistant message is
+sent back to the model.
+
+**Not solved by this.** The check run on the same input after the change:
+request 2 again ended with `finish_reason=length` and 4001 reasoning tokens of
+4000, an empty reply; the reminder request then answered at once (0 reasoning
+tokens) with a correct `done`. A higher limit only moves the edge: this model
+can reason past any limit, and every miss of this kind burns the only second
+chance. Next step to decide: a separate retry for `empty_reply` after
+`finish_reason=length`, and/or limiting reasoning through the API.
+
+**Alternatives.** Keep 1500 and only add `empty_reply`: the failure would be
+named correctly but happen as often. Raise the limit much more: slower and the
+model still may use all of it.

@@ -6,7 +6,9 @@ from typing import Protocol
 from openai import OpenAI
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-MAX_ANSWER_TOKENS = 1500
+# Includes the model's hidden reasoning. 1500 was too small: the free model
+# spent all of it on reasoning and returned an empty reply (DECISIONS.md, D30).
+MAX_ANSWER_TOKENS = 4000
 
 
 @dataclass

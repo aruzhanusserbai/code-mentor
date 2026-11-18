@@ -7,8 +7,9 @@ In debugging mode the final tool is `submit_answer`, in review mode
 The run ends when the model calls the final tool with valid arguments. That
 call is not one of the investigation tools counted by the limit. After the
 limit, only the final tool is offered. The model gets one second chance in
-total: for a text answer, invalid final tool arguments, or a tool call after
-the limit; the second miss ends the run without an answer.
+total: for a text answer, an empty reply (no text and no tool call, usually
+because the reply hit the token limit), invalid final tool arguments, or a
+tool call after the limit; the second miss ends the run without an answer.
 
 The final tool arguments and any text the model writes are never logged or
 traced: in debugging mode they contain the diagnosis and all hint levels
@@ -172,6 +173,11 @@ def run_agent(
             messages.append(assistant_message(reply.content, reply.tool_calls))
             tool_messages, miss = run_tool_calls(reply, ctx, result, tools_allowed, mode)
             messages.extend(tool_messages)
+        elif not (reply.content or "").strip():
+            # Nothing to show the model again: just remind it (D30).
+            log.info("the model returned an empty reply (finish_reason=%s)", reply.finish_reason)
+            messages.append({"role": "user", "content": mode.reminder})
+            miss = "empty_reply"
         else:
             log.info("the model answered with text instead of %s", mode.submit_name)
             result.text_replies.append(reply.content or "")
