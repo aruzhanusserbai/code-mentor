@@ -507,3 +507,29 @@ students to push three times and wait. A person in a chat can see what the
 student has already tried.
 
 **Who decided.** I. The chat is my part (organisation, not code).
+
+## D25 — Ticket 2 bug: the result of BigDecimal.add is thrown away (18 Nov 2026)
+
+**What.** `OrderService.create` starts the total from the first item's line
+(the first product is already loaded for the currency, see ticket 1) and loops
+over the other items with `total.add(lineTotal)` without assigning the result.
+`BigDecimal` is immutable, so the total is always the first line. Orders with
+one item are correct; orders with several items are too low.
+
+**Why.** The symptom matches PLAN.md exactly ("wrong for orders with several
+items") without changing `CONTRACT.md`. The code has a believable history: an
+"optimisation" so that the first product is not loaded twice, built on top of
+the ticket 1 currency logic. Immutable values (`BigDecimal`, `String`) are a
+classic junior mistake, and the bug is best found by debugging, which is the
+skill of this ticket. The fix is one line and easy to check with a black-box
+test. The ticket 1 line (`get(0)`, line 40) did not move, so the ticket 1
+label stays valid, and the two tickets can be fixed in any order.
+
+**Alternatives.** (B) Merge lines with the same product through `Map.put`, so
+the quantity is overwritten: the symptom is "same product twice", not
+"several items", and the contract would need a merge rule. (C) Multiply every
+line by the quantity of the first item: it repeats the `get(0)` pattern of
+ticket 1, so a search finds it without reasoning; kept as a candidate seeded
+bug for the eval.
+
+**Who decided.** Claude proposed three options with a recommendation; I chose A.

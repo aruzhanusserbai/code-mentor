@@ -37,17 +37,21 @@ public class OrderService {
         order.setCreatedAt(OffsetDateTime.now());
 
         // one order = one currency, we take it from the first product
-        Product firstProduct = findProduct(request.getItems().get(0).getProductId());
+        OrderItemRequest firstItem = request.getItems().get(0);
+        Product firstProduct = findProduct(firstItem.getProductId());
         order.setCurrency(firstProduct.getCurrency());
 
-        BigDecimal total = BigDecimal.ZERO;
-        for (OrderItemRequest itemRequest : request.getItems()) {
+        BigDecimal total = firstProduct.getPrice().multiply(BigDecimal.valueOf(firstItem.getQuantity()));
+        order.addItem(new OrderItem(firstProduct, firstItem.getQuantity(), firstProduct.getPrice()));
+
+        List<OrderItemRequest> otherItems = request.getItems().subList(1, request.getItems().size());
+        for (OrderItemRequest itemRequest : otherItems) {
             Product product = findProduct(itemRequest.getProductId());
             if (!product.getCurrency().equals(order.getCurrency())) {
                 throw new InvalidOrderException("All products in an order must have the same currency");
             }
             BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
-            total = total.add(lineTotal);
+            total.add(lineTotal);
             order.addItem(new OrderItem(product, itemRequest.getQuantity(), product.getPrice()));
         }
         order.setTotal(total);

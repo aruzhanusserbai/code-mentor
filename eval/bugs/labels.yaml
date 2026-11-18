@@ -25,3 +25,23 @@ bugs:
       Add @NotEmpty to CreateOrderRequest.items. The existing
       MethodArgumentNotValidException handler then returns 400 in the
       standard error format.
+
+  - id: ticket-2
+    ticket: 2
+    patch: null   # present in the template as shipped
+    category: business-logic
+    symptom: "POST /orders with several items returns a total that counts only the first item"
+    file: src/main/java/com/shopflow/orders/order/OrderService.java
+    line: 54
+    related_locations:
+      - file: src/main/java/com/shopflow/orders/order/OrderService.java
+        line: 44
+    cause: >
+      OrderService.create starts total from the first item's line (line 44)
+      and then loops over the other items, calling total.add(lineTotal)
+      without assigning the result. BigDecimal is immutable, so add returns a
+      new value and total never changes: the order total equals the first
+      line only. Orders with one item are correct, which hides the bug.
+    expected_fix: >
+      Assign the result: total = total.add(lineTotal). Alternatively, compute
+      the total over all items in one loop starting from BigDecimal.ZERO.
